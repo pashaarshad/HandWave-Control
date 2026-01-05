@@ -47,11 +47,6 @@ def generate_frames():
         frame = cv2.flip(frame, 1)
         h, w, c = frame.shape
         
-        # --- UI LAYOUT ---
-        # 1. SCROLL LINE (y=0.5)
-        line_y = int(h * 0.5) 
-        cv2.line(frame, (int(w*0.25), line_y), (w, line_y), (0, 255, 255), 2) # Yellow Line
-        
         # 2. VOLUME ZONE (Left side, 20%)
         vol_zone_w = int(w * 0.20)
         
@@ -67,24 +62,22 @@ def generate_frames():
                 
                 thumb_tip = hand_landmarks.landmark[4]
                 index_tip = hand_landmarks.landmark[8]
+                pinky_tip = hand_landmarks.landmark[20]
+                wrist = hand_landmarks.landmark[0]
+
+                # --- CHECK HAND OPEN STATE (Green Dot Logic) ---
                 
-                # --- CHECK PINCH STATE (Pause Scroll Logic) ---
                 # Calculate pinch distance (Thumb 4 - Index 8)
-                distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
+                pinch_dist = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
+                pinky_dist = np.sqrt((pinky_tip.x - wrist.x)**2 + (pinky_tip.y - wrist.y)**2)
                 
-                # Thresholds
-                pinch_threshold = 0.05 # Distance considered "pinched"
-                is_pinched = distance < pinch_threshold
+                is_hand_open = (pinch_dist > 0.1) and (pinky_dist > 0.15)
                 
                 # --- CURSOR COLOR & LOGIC ---
-                if is_pinched:
-                    # PINCHED: Cursor Green, SCROLL DISABLED
-                    cursor_color = (0, 255, 0) 
-                    is_scrolling_active = False
+                if is_hand_open:
+                    cursor_color = (0, 255, 0) # GREEN = Ready/Open
                 else:
-                    # OPEN: Cursor Yellow, SCROLL ACTIVE (if not in Vol Zone)
-                    cursor_color = (0, 255, 255)
-                    is_scrolling_active = True if not is_in_vol_zone else False
+                    cursor_color = (0, 0, 255) # RED = Closed/Not Ready (or Yellow)
 
                 cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
                 cv2.circle(frame, (cx_index, cy_index), 10, cursor_color, -1) 
@@ -93,47 +86,45 @@ def generate_frames():
                 if cx_index < vol_zone_w:
                     is_in_vol_zone = True
                     # VOLUME LOGIC
-                    vol_ratio = (distance - 0.02) / (0.22 - 0.02)
+                    vol_ratio = (pinch_dist - 0.02) / (0.22 - 0.02)
                     current_volume_percent = int(max(0.0, min(1.0, vol_ratio)) * 100)
-                    
-                    # Visual Line
                     cx_thumb, cy_thumb = int(thumb_tip.x * w), int(thumb_tip.y * h)
                     cv2.line(frame, (cx_thumb, cy_thumb), (cx_index, cy_index), (0, 255, 0), 3)
                 else:
                     is_in_vol_zone = False
 
-                # --- SCROLL LOGIC (State Machine) ---
-                if is_scrolling_active:
+                # --- DYNAMIC SWIPE SCROLL LOGIC ---
+                if not is_in_vol_zone and is_hand_open:
                     curr_y = index_tip.y
                     current_time = time.time()
                     
-                    # Determine current state relative to line
-                    current_position_state = None
-                    if curr_y < 0.45:
-                        current_position_state = "ABOVE"
-                    elif curr_y > 0.55:
-                        current_position_state = "BELOW"
-                    
-                    # Check for State TRANSITION
-                    if last_position_state and current_position_state and (current_time - scroll_cooldown) > 0.5:
+                    # Track relative movement
+                    if prev_wrist_y is not None:
+                        dy = curr_y - prev_wrist_y # Change in Y
                         
-                        # Transition: BELOW -> ABOVE (Swipe UP)
-                        if last_position_state == "BELOW" and current_position_state == "ABOVE":
-                            scroll_action = "SCROLL_DOWN" 
-                            print(f"ACTION: SWIPE UP -> NEXT REEL")
-                            scroll_cooldown = current_time
-                            cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        # Threshold for swipe (Significant movement)
+                        swipe_threshold = 0.06 
                         
-                        # Transition: ABOVE -> BELOW (Swipe DOWN)
-                        elif last_position_state == "ABOVE" and current_position_state == "BELOW":
-                            scroll_action = "SCROLL_UP" 
-                            print(f"ACTION: SWIPE DOWN -> PREV REEL")
-                            scroll_cooldown = current_time
-                            cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        # Only trigger if cooldown is over
+                        if (current_time - scroll_cooldown) > 0.5:
+                            
+                            # SWIPE UP (y decreases) -> NEXT REEL
+                            if dy < -swipe_threshold:
+                                scroll_action = "SCROLL_DOWN" # UI Next
+                                print(f"ACTION: DYNAMIC SWIPE UP -> NEXT")
+                                scroll_cooldown = current_time
+                                cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                                
+                            # SWIPE DOWN (y increases) -> PREV REEL
+                            elif dy > swipe_threshold:
+                                scroll_action = "SCROLL_UP" # UI Prev
+                                print(f"ACTION: DYNAMIC SWIPE DOWN -> PREV")
+                                scroll_cooldown = current_time
+                                cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-                    # Only update state if we are decisively in a new zone
-                    if current_position_state:
-                         last_position_state = current_position_state
+                    prev_wrist_y = curr_y # Update previous position
+                else:
+                    prev_wrist_y = None # Reset tracking if hand closed or in volume zone
 
         # Emit gesture update (MOVED OUTSIDE hand detection to always emit current state)
         socketio.emit('gesture_update', {
