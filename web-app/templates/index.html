@@ -22,7 +22,6 @@
             margin: 0 auto;
         }
 
-        /* The Reel Screens Container */
         .screen-container {
             width: 100%;
             height: 100%;
@@ -45,7 +44,6 @@
             transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
-        /* Animation Classes */
         .slide-out-top {
             transform: translateY(-100%);
         }
@@ -135,7 +133,10 @@
     </div>
 
     <script type="text/javascript">
-        const socket = io();
+        // FORCE WEBSOCKETS + Polling fallback
+        const socket = io({
+            transports: ['websocket', 'polling']
+        });
 
         // Mobile Demo State
         const reelsData = [
@@ -183,21 +184,18 @@
 
             const oldScreen = container.querySelector('.slide-active');
             currentReelIndex++;
-            const newScreen = createScreen(currentReelIndex, 'slide-in-bottom'); // Start below
+            const newScreen = createScreen(currentReelIndex, 'slide-in-bottom');
 
             container.appendChild(newScreen);
-
-            // Force reflow
             void newScreen.offsetWidth;
 
-            // Animate
             oldScreen.classList.remove('slide-active');
-            oldScreen.classList.add('slide-out-top'); // Go Up
+            oldScreen.classList.add('slide-out-top');
 
             newScreen.classList.remove('slide-in-bottom');
-            newScreen.classList.add('slide-active'); // Move to center
+            newScreen.classList.add('slide-active');
 
-            setTimeout(() => oldScreen.remove(), 400); // Cleanup
+            setTimeout(() => oldScreen.remove(), 400);
         }
 
         function slidePrev() {
@@ -205,14 +203,13 @@
 
             const oldScreen = container.querySelector('.slide-active');
             currentReelIndex--;
-            const newScreen = createScreen(currentReelIndex, 'slide-in-top'); // Start above
+            const newScreen = createScreen(currentReelIndex, 'slide-in-top');
 
             container.appendChild(newScreen);
-
             void newScreen.offsetWidth;
 
             oldScreen.classList.remove('slide-active');
-            oldScreen.classList.add('slide-out-bottom'); // Go Down
+            oldScreen.classList.add('slide-out-bottom');
 
             newScreen.classList.remove('slide-in-top');
             newScreen.classList.add('slide-active');
@@ -230,7 +227,14 @@
         socket.on('connect', () => {
             statusText.innerText = "Connected 🟢";
             statusDot.classList.add('connected');
-            log("System Connected.");
+            statusDot.style.backgroundColor = "#0f0";
+            log("Socket Connected.");
+        });
+
+        socket.on('connect_error', (err) => {
+            statusText.innerText = "Error 🔴";
+            statusDot.style.backgroundColor = "red";
+            log("Connection Error: " + err.message);
         });
 
         socket.on('gesture_update', (data) => {
