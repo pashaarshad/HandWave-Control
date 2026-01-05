@@ -68,34 +68,46 @@ def generate_frames():
                 thumb_tip = hand_landmarks.landmark[4]
                 index_tip = hand_landmarks.landmark[8]
                 
-                # --- CURSOR ---
-                cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
-                cv2.circle(frame, (cx_index, cy_index), 10, (0, 255, 255), -1) 
+                # --- CHECK PINCH STATE (Pause Scroll Logic) ---
+                # Calculate pinch distance (Thumb 4 - Index 8)
+                distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
                 
-                # --- CHECK ZONE ---
+                # Thresholds
+                pinch_threshold = 0.05 # Distance considered "pinched"
+                is_pinched = distance < pinch_threshold
+                
+                # --- CURSOR COLOR & LOGIC ---
+                if is_pinched:
+                    # PINCHED: Cursor Green, SCROLL DISABLED
+                    cursor_color = (0, 255, 0) 
+                    is_scrolling_active = False
+                else:
+                    # OPEN: Cursor Yellow, SCROLL ACTIVE (if not in Vol Zone)
+                    cursor_color = (0, 255, 255)
+                    is_scrolling_active = True if not is_in_vol_zone else False
+
+                cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
+                cv2.circle(frame, (cx_index, cy_index), 10, cursor_color, -1) 
+                
+                # --- CHECK VOLUME ZONE ---
                 if cx_index < vol_zone_w:
                     is_in_vol_zone = True
                     # VOLUME LOGIC
-                    distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
-                    min_dist, max_dist = 0.02, 0.22
-                    vol_ratio = (distance - min_dist) / (max_dist - min_dist)
+                    vol_ratio = (distance - 0.02) / (0.22 - 0.02)
                     current_volume_percent = int(max(0.0, min(1.0, vol_ratio)) * 100)
                     
-                    # Visual
+                    # Visual Line
                     cx_thumb, cy_thumb = int(thumb_tip.x * w), int(thumb_tip.y * h)
                     cv2.line(frame, (cx_thumb, cy_thumb), (cx_index, cy_index), (0, 255, 0), 3)
                 else:
                     is_in_vol_zone = False
 
                 # --- SCROLL LOGIC (State Machine) ---
-                if not is_in_vol_zone:
+                if is_scrolling_active:
                     curr_y = index_tip.y
                     current_time = time.time()
                     
-                    # Determine current state relative to line (with small buffer)
-                    # Line is 0.5. 
-                    # ABOVE (< 0.45), BELOW (> 0.55), BUFFER (0.45-0.55)
-                    
+                    # Determine current state relative to line
                     current_position_state = None
                     if curr_y < 0.45:
                         current_position_state = "ABOVE"
@@ -107,14 +119,14 @@ def generate_frames():
                         
                         # Transition: BELOW -> ABOVE (Swipe UP)
                         if last_position_state == "BELOW" and current_position_state == "ABOVE":
-                            scroll_action = "SCROLL_DOWN" # Content moves down, meaning Next Item
+                            scroll_action = "SCROLL_DOWN" 
                             print(f"ACTION: SWIPE UP -> NEXT REEL")
                             scroll_cooldown = current_time
                             cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                         
                         # Transition: ABOVE -> BELOW (Swipe DOWN)
                         elif last_position_state == "ABOVE" and current_position_state == "BELOW":
-                            scroll_action = "SCROLL_UP" # Content moves up, meaning Prev Item
+                            scroll_action = "SCROLL_UP" 
                             print(f"ACTION: SWIPE DOWN -> PREV REEL")
                             scroll_cooldown = current_time
                             cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
