@@ -9,12 +9,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        /* Specific styles for the Reel scrolling mock */
         body.reels-mode {
             background-color: #000;
             margin: 0;
             overflow: hidden;
-            /* Hide standard browser scrollbar */
         }
 
         .reel-container {
@@ -23,7 +21,6 @@
             display: flex;
             flex-direction: column;
             transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-            /* Smooth scroll animation */
         }
 
         .reel {
@@ -39,8 +36,9 @@
             border-bottom: 2px solid rgba(255, 255, 255, 0.1);
         }
 
+        /* 10 Reels Colors */
         .reel:nth-child(1) {
-            background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+            background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%);
         }
 
         .reel:nth-child(2) {
@@ -60,6 +58,27 @@
             background: linear-gradient(to top, #30cfd0 0%, #330867 100%);
         }
 
+        .reel:nth-child(6) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .reel:nth-child(7) {
+            background: linear-gradient(to right, #fa709a 0%, #fee140 100%);
+        }
+
+        .reel:nth-child(8) {
+            background: linear-gradient(to top, #0ba360 0%, #3cba92 100%);
+        }
+
+        .reel:nth-child(9) {
+            background: linear-gradient(-225deg, #FFFEFF 0%, #D7FFFE 100%);
+            color: #333;
+        }
+
+        .reel:nth-child(10) {
+            background: linear-gradient(to right, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%);
+        }
+
         .overlay-ui {
             position: fixed;
             top: 20px;
@@ -73,26 +92,45 @@
             width: 150px;
         }
 
+        /* Volume Zone Overlay on Left */
+        .vol-zone-ui {
+            position: fixed;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px 10px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: border-color 0.2s;
+        }
+
+        .vol-bar-vertical {
+            width: 10px;
+            height: 200px;
+            background: #333;
+            border-radius: 5px;
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .vol-fill-vertical {
+            width: 100%;
+            height: 50%;
+            background: #00ff00;
+            border-radius: 5px;
+            transition: height 0.1s;
+        }
+
         .mini-video {
             width: 100%;
             border-radius: 8px;
             margin-bottom: 10px;
             border: 2px solid #555;
-        }
-
-        .vol-indicator {
-            height: 6px;
-            background: #444;
-            border-radius: 3px;
-            overflow: hidden;
-            margin-top: 5px;
-        }
-
-        .vol-fill {
-            height: 100%;
-            width: 50%;
-            background: #00ff00;
-            transition: width 0.1s;
         }
 
         .back-btn {
@@ -103,125 +141,141 @@
             color: white;
             padding: 10px 20px;
             border-radius: 20px;
-            text-decoration: none;
             z-index: 1000;
-            font-family: 'Inter', sans-serif;
+            text-decoration: none;
         }
     </style>
 </head>
 
 <body class="reels-mode">
-    <a href="/" class="back-btn">← Back to Dashboard</a>
+    <a href="/" class="back-btn">← Back</a>
 
-    <!-- Overlay widget to see camera and volume while testing -->
+    <!-- Left Side Volume Feedback -->
+    <div class="vol-zone-ui" id="vol-zone-container">
+        <small style="writing-mode: vertical-rl; text-orientation: mixed; margin-bottom: 8px; color:#aaa;">VOLUME
+            ZONE</small>
+        <div class="vol-bar-vertical">
+            <div class="vol-fill-vertical" id="vol-fill-vertical"></div>
+        </div>
+        <span id="vol-text">50%</span>
+    </div>
+
+    <!-- Camera Overlay (Right) -->
     <div class="overlay-ui">
         <img src="{{ url_for('video_feed') }}" class="mini-video">
-        <small>Volume</small>
-        <div class="vol-indicator">
-            <div class="vol-fill" id="reel-vol-bar"></div>
-        </div>
-        <div style="margin-top:5px; font-size: 0.8rem; text-align:center;" id="reel-status">
-            Wait...
+        <div style="font-size: 0.8rem; text-align:center;" id="reel-status">
+            Listening... 👂
         </div>
     </div>
 
-    <!-- The Reel Feed -->
+    <!-- The Reel Feed (10 Items) -->
     <div class="reel-container" id="feed">
         <div class="reel">
             <div>
-                <h1>📱 Reel 1</h1>
-                <p style="font-size: 1rem;">Swipe UP to scroll down</p>
+                <h1>Reel 1</h1>
+                <p>Swipe UP</p>
             </div>
         </div>
         <div class="reel">
             <div>
-                <h1>🌊 Reel 2</h1>
-                <p style="font-size: 1rem;">Blue Vibes</p>
+                <h1>Reel 2</h1>
+                <p>Keep Going</p>
             </div>
         </div>
         <div class="reel">
             <div>
-                <h1>☁️ Reel 3</h1>
-                <p style="font-size: 1rem;">Clean & White</p>
+                <h1>Reel 3</h1>
+                <p>Scroll Test</p>
             </div>
         </div>
         <div class="reel">
             <div>
-                <h1>🌿 Reel 4</h1>
-                <p style="font-size: 1rem;">Nature Green</p>
+                <h1>Reel 4</h1>
+                <p>Nature Green</p>
             </div>
         </div>
         <div class="reel">
             <div>
-                <h1>💜 Reel 5</h1>
-                <p style="font-size: 1rem;">Deep Purple</p>
+                <h1>Reel 5</h1>
+                <p>Deep Pulse</p>
+            </div>
+        </div>
+        <!-- 5 New Reels -->
+        <div class="reel">
+            <div>
+                <h1>Reel 6</h1>
+                <p>Royal</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>Reel 7</h1>
+                <p>Sunset</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>Reel 8</h1>
+                <p>Emerald</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>Reel 9</h1>
+                <p>Holographic</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>Reel 10</h1>
+                <p>The End</p>
             </div>
         </div>
     </div>
 
     <script type="text/javascript">
-        // Connect to Python Backend
         const socket = io();
 
         let currentReelIndex = 0;
-        const totalReels = 5;
+        const totalReels = 10; // Updated to 10
         const feed = document.getElementById('feed');
-        const volBar = document.getElementById('reel-vol-bar');
+        const volFill = document.getElementById('vol-fill-vertical');
+        const volText = document.getElementById('vol-text');
         const statusText = document.getElementById('reel-status');
+        const volContainer = document.getElementById('vol-zone-container');
 
         function updateScroll() {
-            // CSS Transform to slide the container up/down
-            // -100vh * index moves it to show the correct reel
             const translateY = -(currentReelIndex * 100);
             feed.style.transform = `translateY(${translateY}vh)`;
-            console.log(`Updated scroll to Reel ${currentReelIndex + 1} (${translateY}vh)`);
+            console.log(`Scroll: Reel ${currentReelIndex + 1}`);
         }
 
-        socket.on('connect', () => {
-            statusText.innerText = "Connected 🟢";
-            statusText.style.color = "#0f0";
-        });
-
         socket.on('gesture_update', (data) => {
-            // 1. Update Volume UI
+            // 1. Update Volume
             if (data.volume !== undefined) {
-                volBar.style.width = data.volume + "%";
-                // Dynamic color for volume
-                if (data.volume < 20) volBar.style.backgroundColor = "red";
-                else volBar.style.backgroundColor = "#00ff00";
+                volFill.style.height = data.volume + "%";
+                volText.innerText = data.volume + "%";
+
+                // Highlight Vol Zone if active (implied by backend state, though we don't send 'is_active' yet, we can infer if volume changes or add flag later. For now, solid UI)
             }
 
-            // 2. Handle Scroll Actions
+            // 2. Scroll Logic
             if (data.scroll === "SCROLL_DOWN") {
-                console.log("CMD: SCROLL_DOWN -> Next Slide");
                 if (currentReelIndex < totalReels - 1) {
                     currentReelIndex++;
                     updateScroll();
                     statusText.innerText = `Reel ${currentReelIndex + 1} ⬇️`;
-                } else {
-                    statusText.innerText = "End 🛑";
                 }
             } else if (data.scroll === "SCROLL_UP") {
-                console.log("CMD: SCROLL_UP -> Prev Slide");
                 if (currentReelIndex > 0) {
                     currentReelIndex--;
                     updateScroll();
                     statusText.innerText = `Reel ${currentReelIndex + 1} ⬆️`;
-                } else {
-                    statusText.innerText = "Top 🔝";
-                }
-            } else if (!data.scroll) {
-                // If no scroll, show volume status (unless transient status is showing)
-                if (!statusText.innerText.includes("Reel") && !statusText.innerText.includes("End") && !statusText.innerText.includes("Top")) {
-                    statusText.innerText = `Vol: ${data.volume}%`;
                 }
             }
 
-            // Clear transient status text after a moment
             if (data.scroll) {
-                setTimeout(() => {
-                    statusText.innerText = "Listening... 👂";
-                }, 1500);
+                setTimeout(() => { statusText.innerText = "Listening... 👂"; }, 1500);
             }
         });
     </script>

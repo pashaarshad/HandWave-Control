@@ -31,7 +31,9 @@ def generate_frames():
     
     # Scroll State
     prev_finger_y = None
-    scroll_state = "IDLE" # IDLE, CROSSING_UP, CROSSING_DOWN
+    
+    # Volume State
+    current_volume_percent = 50 # Default start
     
     while True:
         success, frame = camera.read()
@@ -42,90 +44,97 @@ def generate_frames():
         # Get frame dimensions
         h, w, c = frame.shape
         
-        # DRAW REFERENCE LINE (Middle of Screen)
-        # Y-coordinate of the line (e.g., 50% height)
+        # --- UI LAYOUT ---
+        # 1. SCROLL LINE (Right side/Main area)
         line_y = int(h * 0.5) 
-        cv2.line(frame, (0, line_y), (w, line_y), (0, 255, 255), 2) # Yellow Line
-        cv2.putText(frame, "SCROLL LINE", (10, line_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-
+        cv2.line(frame, (int(w*0.3), line_y), (w, line_y), (0, 255, 255), 2) # Yellow Line
+        
+        # 2. VOLUME ZONE (Left side, 25%)
+        vol_zone_w = int(w * 0.25)
+        
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(frame_rgb)
         
-        current_volume_percent = 0
         scroll_action = None
+        is_in_vol_zone = False
         
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 
-                # --- NEW FEATURE 1: VOLUME via PINCH (Distance) ---
                 # Thumb Tip: 4, Index Tip: 8
                 thumb_tip = hand_landmarks.landmark[4]
                 index_tip = hand_landmarks.landmark[8]
                 
-                # Calculate distance between thumb and index finger
-                distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
-                
-                # Map Distance to Volume
-                # Closed (Touch) ~ 0.02
-                # Wide Open ~ 0.20+
-                min_dist = 0.02
-                max_dist = 0.22
-                
-                # Direct Map: More Distance = More Volume
-                vol_ratio = (distance - min_dist) / (max_dist - min_dist)
-                vol_ratio = max(0.0, min(1.0, vol_ratio)) # Clamp
-                
-                # Smooth log curve for better feel (optional, sticking to linear for now)
-                current_volume_percent = int(vol_ratio * 100)
-                
-                # Visualize Pinch Line color based on volume (Red=Low, Green=High)
-                line_color = (0, 0, 255) if vol_ratio < 0.3 else (0, 255, 0)
-                cx_thumb, cy_thumb = int(thumb_tip.x * w), int(thumb_tip.y * h)
+                # --- CURSOR (Index Tip) ---
                 cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
-                cv2.line(frame, (cx_thumb, cy_thumb), (cx_index, cy_index), line_color, 3)
-                cv2.putText(frame, f"Vol: {current_volume_percent}%", (cx_thumb, cy_thumb - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, line_color, 2)
+                cv2.circle(frame, (cx_index, cy_index), 10, (0, 255, 255), -1) # Yellow Cursor
                 
-                
-                # --- NEW FEATURE 2: SCROLL via LINE CROSSING ---
-                # Use Index Finger Tip (8) for scrolling
-                curr_y = index_tip.y # Normalized 0.0 (Top) to 1.0 (Bottom)
-                
-                # Setup hysteresis / threshold zone around the line (e.g., 0.45 to 0.55)
-                # Line is at 0.5
-                
-                current_time = time.time()
-                
-                # Logic: Detect Crossing
-                # We need to track if finger WAS above and IS NOW below (Swipe Down)
-                # or WAS below and IS NOW above (Swipe Up)
-                
-                if prev_finger_y is not None and (current_time - scroll_cooldown) > 0.8:
-                    # Defining Zones: TOP (< 0.45), BOTTOM (> 0.55), MIDDLE (0.45-0.55)
-                    line_normalized = 0.5
-                    buffer = 0.05
+                # --- CHECK ZONE ---
+                # Check if cursor is in Volume Zone (Left side)
+                if cx_index < vol_zone_w:
+                    is_in_vol_zone = True
                     
-                    # Swipe UP (Bottom -> Top) -> Scroll DOWN
-                    if prev_finger_y > (line_normalized + buffer) and curr_y < (line_normalized - buffer):
-                        scroll_action = "SCROLL_DOWN" # Next Reel
-                        print("ACTION: CROSS UP -> NEXT REEL")
-                        scroll_cooldown = current_time
-                        cv2.putText(frame, "NEXT REEL!", (int(w/2), int(h/2)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    # --- VOLUME LOGIC (Active) ---
+                    # Calculate pinch distance
+                    distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
+                    
+                    # Map Distance
+                    min_dist = 0.02
+                    max_dist = 0.22
+                    vol_ratio = (distance - min_dist) / (max_dist - min_dist)
+                    vol_ratio = max(0.0, min(1.0, vol_ratio))
+                    
+                    current_volume_percent = int(vol_ratio * 100)
+                    
+                    # Visual: Pinch Line
+                    cx_thumb, cy_thumb = int(thumb_tip.x * w), int(thumb_tip.y * h)
+                    cv2.line(frame, (cx_thumb, cy_thumb), (cx_index, cy_index), (0, 255, 0), 3)
+                    
+                else:
+                    is_in_vol_zone = False
+                    # Volume remains LOCKED at last `current_volume_percent`
+                
+                
+                # --- SCROLL LOGIC ---
+                # Only scroll if NOT in volume zone (to avoid conflicts)
+                if not is_in_vol_zone:
+                    curr_y = index_tip.y
+                    current_time = time.time()
+                    
+                    # Check crossing if we have a previous point and cooldown is over
+                    if prev_finger_y is not None and (current_time - scroll_cooldown) > 0.8:
+                        line_normalized = 0.5
+                        buffer = 0.04 # Reduced buffer for sensitivity
                         
-                    # Swipe DOWN (Top -> Bottom) -> Scroll UP
-                    elif prev_finger_y < (line_normalized - buffer) and curr_y > (line_normalized + buffer):
-                        scroll_action = "SCROLL_UP" # Prev Reel
-                        print("ACTION: CROSS DOWN -> PREV REEL")
-                        scroll_cooldown = current_time
-                        cv2.putText(frame, "PREV REEL!", (int(w/2), int(h/2)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        # Swipe UP (Bottom -> Top)
+                        if prev_finger_y > (line_normalized + buffer) and curr_y < (line_normalized - buffer):
+                            scroll_action = "SCROLL_DOWN" 
+                            scroll_cooldown = current_time
+                            cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                            
+                        # Swipe DOWN (Top -> Bottom)
+                        elif prev_finger_y < (line_normalized - buffer) and curr_y > (line_normalized + buffer):
+                            scroll_action = "SCROLL_UP"
+                            scroll_cooldown = current_time
+                            cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    
+                    prev_finger_y = curr_y
 
-                prev_finger_y = curr_y
-
-                # Emit updates
                 socketio.emit('gesture_update', {
                     'volume': current_volume_percent,
                     'scroll': scroll_action
                 })
+        
+        # --- DRAW VISUALIZATIONS ---
+        # Draw Volume Zone Overlay
+        overlay = frame.copy()
+        color = (0, 255, 0) if is_in_vol_zone else (50, 50, 50) # Green if active, Gray if idle
+        cv2.rectangle(overlay, (0, 0), (vol_zone_w, h), color, -1)
+        cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+        
+        cv2.putText(frame, "VOL ZONE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(frame, f"{current_volume_percent}%", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 3)
 
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
@@ -150,4 +159,3 @@ def connect():
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
-
