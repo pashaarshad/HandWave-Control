@@ -9,24 +9,29 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        /* Embedding Mobile Demo directly */
+        /* Mobile Demo Frame */
         .mobile-demo-frame {
             width: 300px;
-            height: 600px;
-            border: 12px solid #333;
-            border-radius: 30px;
+            height: 550px;
+            border: 12px solid #222;
+            border-radius: 35px;
             overflow: hidden;
             position: relative;
             background: #000;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
             margin: 0 auto;
-            /* Center it */
+        }
+
+        /* The Reel Screens Container */
+        .screen-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
         }
 
         .mobile-screen {
             width: 100%;
             height: 100%;
-            transition: background 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -34,19 +39,44 @@
             color: white;
             padding: 20px;
             box-sizing: border-box;
-            background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Animation Classes */
+        .slide-out-top {
+            transform: translateY(-100%);
+        }
+
+        .slide-in-bottom {
+            transform: translateY(100%);
+        }
+
+        .slide-active {
+            transform: translateY(0);
+        }
+
+        .slide-out-bottom {
+            transform: translateY(100%);
+        }
+
+        .slide-in-top {
+            transform: translateY(-100%);
         }
 
         .gesture-log {
-            font-family: monospace;
-            background: #1e293b;
+            font-family: 'Courier New', Courier, monospace;
+            background: #111;
             color: #0f0;
             padding: 10px;
             height: 150px;
             overflow-y: auto;
             border-radius: 8px;
             font-size: 0.8rem;
-            margin-top: 10px;
+            margin-top: 15px;
+            border: 1px solid #333;
         }
     </style>
 </head>
@@ -88,11 +118,15 @@
                 </div>
 
                 <div class="control-group">
-                    <label>Mobile Reel Demo</label>
+                    <label>Mobile Reel Demo (10 Reels)</label>
                     <div class="mobile-demo-frame">
-                        <div class="mobile-screen" id="mobile-screen">
-                            <h1 id="screen-title">Reel 1</h1>
-                            <p id="screen-desc">Swipe UP for Next</p>
+                        <div class="screen-container" id="screen-container">
+                            <!-- JS will populate active screens -->
+                            <div class="mobile-screen slide-active" id="active-screen"
+                                style="background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%);">
+                                <h1>Reel 1</h1>
+                                <p>Swipe UP for Next</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -104,47 +138,93 @@
         const socket = io();
 
         // Mobile Demo State
-        const colors = [
-            "linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%)", // Reel 1
-            "linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)", // Reel 2
-            "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)", // Reel 3
-            "linear-gradient(to right, #43e97b 0%, #38f9d7 100%)", // Reel 4
-            "linear-gradient(to top, #30cfd0 0%, #330867 100%)", // Reel 5
-            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", // Reel 6
-            "linear-gradient(to right, #fa709a 0%, #fee140 100%)", // Reel 7
-            "linear-gradient(to top, #0ba360 0%, #3cba92 100%)", // Reel 8
-            "linear-gradient(-225deg, #2CD8D5 0%, #C5C1FF 56%, #FFBAC3 100%)", // Reel 9
-            "linear-gradient(to right, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%)" // Reel 10
+        const reelsData = [
+            { bg: "linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%)", title: "Reel 1", desc: "Swipe UP for Next" },
+            { bg: "linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)", title: "Reel 2", desc: "Cool Blue" },
+            { bg: "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)", title: "Reel 3", desc: "Minimalist", contrast: true },
+            { bg: "linear-gradient(to right, #43e97b 0%, #38f9d7 100%)", title: "Reel 4", desc: "Nature Vibes" },
+            { bg: "linear-gradient(to top, #30cfd0 0%, #330867 100%)", title: "Reel 5", desc: "Deep Ocean" },
+            { bg: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", title: "Reel 6", desc: "Royal Purple" },
+            { bg: "linear-gradient(to right, #fa709a 0%, #fee140 100%)", title: "Reel 7", desc: "Sunset Glow" },
+            { bg: "linear-gradient(to top, #0ba360 0%, #3cba92 100%)", title: "Reel 8", desc: "Emerald City" },
+            { bg: "linear-gradient(-225deg, #2CD8D5 0%, #C5C1FF 56%, #FFBAC3 100%)", title: "Reel 9", desc: "Holographic", contrast: true },
+            { bg: "linear-gradient(to right, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%)", title: "Reel 10", desc: "The End" }
         ];
 
-        let reelIndex = 0;
-        const totalReels = colors.length;
+        let currentReelIndex = 0;
+        const totalReels = reelsData.length;
 
-        // DOM Elements
-        const mobileScreen = document.getElementById('mobile-screen');
-        const screenTitle = document.getElementById('screen-title');
-        const screenDesc = document.getElementById('screen-desc');
+        const container = document.getElementById('screen-container');
         const volBar = document.getElementById('volume-bar');
         const volText = document.getElementById('volume-text');
         const logBox = document.getElementById('gesture-log');
         const statusText = document.getElementById('status-text');
         const statusDot = document.getElementById('status-dot');
 
-        function log(msg) {
+        function createScreen(index, startClass) {
             const div = document.createElement('div');
-            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            logBox.prepend(div);
-            // keep log short
-            if (logBox.children.length > 50) logBox.lastChild.remove();
+            div.className = `mobile-screen ${startClass}`;
+            div.style.background = reelsData[index].bg;
+            if (reelsData[index].contrast) div.style.color = "#333";
+
+            const h1 = document.createElement('h1');
+            h1.innerText = reelsData[index].title;
+
+            const p = document.createElement('p');
+            p.innerText = reelsData[index].desc;
+
+            div.appendChild(h1);
+            div.appendChild(p);
+            return div;
         }
 
-        function updateMobileScreen() {
-            mobileScreen.style.background = colors[reelIndex];
-            screenTitle.innerText = `Reel ${reelIndex + 1}`;
+        function slideNext() {
+            if (currentReelIndex >= totalReels - 1) return;
 
-            // animation effect
-            mobileScreen.style.opacity = 0.5;
-            setTimeout(() => mobileScreen.style.opacity = 1, 200);
+            const oldScreen = container.querySelector('.slide-active');
+            currentReelIndex++;
+            const newScreen = createScreen(currentReelIndex, 'slide-in-bottom'); // Start below
+
+            container.appendChild(newScreen);
+
+            // Force reflow
+            void newScreen.offsetWidth;
+
+            // Animate
+            oldScreen.classList.remove('slide-active');
+            oldScreen.classList.add('slide-out-top'); // Go Up
+
+            newScreen.classList.remove('slide-in-bottom');
+            newScreen.classList.add('slide-active'); // Move to center
+
+            setTimeout(() => oldScreen.remove(), 400); // Cleanup
+        }
+
+        function slidePrev() {
+            if (currentReelIndex <= 0) return;
+
+            const oldScreen = container.querySelector('.slide-active');
+            currentReelIndex--;
+            const newScreen = createScreen(currentReelIndex, 'slide-in-top'); // Start above
+
+            container.appendChild(newScreen);
+
+            void newScreen.offsetWidth;
+
+            oldScreen.classList.remove('slide-active');
+            oldScreen.classList.add('slide-out-bottom'); // Go Down
+
+            newScreen.classList.remove('slide-in-top');
+            newScreen.classList.add('slide-active');
+
+            setTimeout(() => oldScreen.remove(), 400);
+        }
+
+        function log(msg) {
+            const div = document.createElement('div');
+            div.innerText = `> ${msg}`;
+            logBox.prepend(div);
+            if (logBox.children.length > 50) logBox.lastChild.remove();
         }
 
         socket.on('connect', () => {
@@ -154,32 +234,21 @@
         });
 
         socket.on('gesture_update', (data) => {
-            // 1. Update Volume
+            // Volume
             if (data.volume !== undefined) {
                 volBar.style.width = data.volume + "%";
                 volText.innerText = data.volume + "%";
-                // Color change based on level
                 if (data.volume < 20) volBar.style.background = "linear-gradient(90deg, #ff9a9e 0%, #fecfef 100%)";
                 else volBar.style.background = "linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)";
             }
 
-            // 2. Scroll Update
+            // Scroll Actions
             if (data.scroll === "SCROLL_DOWN") {
-                if (reelIndex < totalReels - 1) {
-                    reelIndex++;
-                    updateMobileScreen();
-                    log(`ACTION: Next Reel (${reelIndex + 1}) ⬇️`);
-                } else {
-                    log("End of Reels 🛑");
-                }
+                log(`NEXT REEL (${currentReelIndex + 2}) ⬆️`);
+                slideNext();
             } else if (data.scroll === "SCROLL_UP") {
-                if (reelIndex > 0) {
-                    reelIndex--;
-                    updateMobileScreen();
-                    log(`ACTION: Prev Reel (${reelIndex + 1}) ⬆️`);
-                } else {
-                    log("Start of Reels 🔝");
-                }
+                log(`PREV REEL (${currentReelIndex}) ⬇️`);
+                slidePrev();
             }
         });
     </script>
