@@ -77,10 +77,21 @@ def generate_frames():
                     # OPEN HAND -> RED -> MODE: PREV ONLY
                     cursor_color = (0, 0, 255) # Red (BGR)
                     mode = "PREV_ONLY"
+                    
+                    # AUTO-TRIGGER: Go Previous Once when Hand Opens
+                    # Check cooldown to avoid double firing
+                    if not has_triggered_red_action and (time.time() - scroll_cooldown) > 0.5:
+                        scroll_action = "SCROLL_UP"
+                        print("ACTION: AUTO-OPEN -> PREV")
+                        scroll_cooldown = time.time()
+                        has_triggered_red_action = True
+                        cv2.putText(frame, "AUTO PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                        
                 else:
                     # CLOSED/SINGLE -> GREEN -> MODE: NEXT ONLY
                     cursor_color = (0, 255, 0) # Green (BGR)
                     mode = "NEXT_ONLY"
+                    has_triggered_red_action = False # Reset flag when hand closes
 
                 cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
                 cv2.circle(frame, (cx_index, cy_index), 10, cursor_color, -1) 
@@ -119,6 +130,7 @@ def generate_frames():
                                 cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                                 
                             # SWIPE DOWN (y increase) -> PREV REEL (Only if mode is PREV_ONLY)
+                            # (Note: Auto-trigger handles strict "Once", but we allow manual swipe if needed)
                             elif dy > swipe_threshold and mode == "PREV_ONLY":
                                 scroll_action = "SCROLL_UP" # Content moves up = Prev Reel
                                 print(f"ACTION: RED MODE -> PREV")
