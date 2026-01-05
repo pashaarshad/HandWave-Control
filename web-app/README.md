@@ -35,3 +35,11 @@ Please ensure you are using a compatible version.
 | **Index Finger DOWN** 👇 | Decrease Volume |
 | **Hand Swipe UP** ✋⬆️ | Scroll Down (Next Reel) |
 | **Hand Swipe DOWN** ✋⬇️ | Scroll Up (Prev Reel) |
+
+## 📜 License & Copyright
+
+**Copyright © 2026 CodePlay. All Rights Reserved.**
+
+This project is licensed under the **MIT License**.
+
+> **Note**: This software is the intellectual property of **CodePlay**. Unauthorized commercial exploitation is strictly monitored.

@@ -1,6 +1,12 @@
 import eventlet
 eventlet.monkey_patch()
 
+# ==========================================
+#  HandWave Control - Gesture Interface
+#  Copyright (c) 2026 CodePlay. All Rights Reserved.
+#  Licensed under the MIT License.
+# ==========================================
+
 from flask import Flask, render_template, Response
 from flask_socketio import SocketIO, emit
 import cv2
