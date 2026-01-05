@@ -65,19 +65,22 @@ def generate_frames():
                 pinky_tip = hand_landmarks.landmark[20]
                 wrist = hand_landmarks.landmark[0]
 
-                # --- CHECK HAND OPEN STATE (Green Dot Logic) ---
-                
-                # Calculate pinch distance (Thumb 4 - Index 8)
+                # --- CHECK HAND OPEN STATE ---
+                # Calculate pinch/hand open metrics
                 pinch_dist = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
                 pinky_dist = np.sqrt((pinky_tip.x - wrist.x)**2 + (pinky_tip.y - wrist.y)**2)
                 
                 is_hand_open = (pinch_dist > 0.1) and (pinky_dist > 0.15)
                 
-                # --- CURSOR COLOR & LOGIC ---
+                # --- CURSOR COLOR & MODE LOGIC ---
                 if is_hand_open:
-                    cursor_color = (0, 255, 0) # GREEN = Ready/Open
+                    # OPEN HAND -> RED -> MODE: PREV ONLY
+                    cursor_color = (0, 0, 255) # Red (BGR)
+                    mode = "PREV_ONLY"
                 else:
-                    cursor_color = (0, 0, 255) # RED = Closed/Not Ready (or Yellow)
+                    # CLOSED/SINGLE -> GREEN -> MODE: NEXT ONLY
+                    cursor_color = (0, 255, 0) # Green (BGR)
+                    mode = "NEXT_ONLY"
 
                 cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
                 cv2.circle(frame, (cx_index, cy_index), 10, cursor_color, -1) 
@@ -94,7 +97,7 @@ def generate_frames():
                     is_in_vol_zone = False
 
                 # --- DYNAMIC SWIPE SCROLL LOGIC ---
-                if not is_in_vol_zone and is_hand_open:
+                if not is_in_vol_zone:
                     curr_y = index_tip.y
                     current_time = time.time()
                     
@@ -102,29 +105,29 @@ def generate_frames():
                     if prev_wrist_y is not None:
                         dy = curr_y - prev_wrist_y # Change in Y
                         
-                        # Threshold for swipe (Significant movement)
-                        swipe_threshold = 0.06 
+                        # Threshold for swipe
+                        swipe_threshold = 0.05 
                         
                         # Only trigger if cooldown is over
                         if (current_time - scroll_cooldown) > 0.5:
                             
-                            # SWIPE UP (y decreases) -> NEXT REEL
-                            if dy < -swipe_threshold:
-                                scroll_action = "SCROLL_DOWN" # UI Next
-                                print(f"ACTION: DYNAMIC SWIPE UP -> NEXT")
+                            # SWIPE UP (y decrease) -> NEXT REEL (Only if mode is NEXT_ONLY)
+                            if dy < -swipe_threshold and mode == "NEXT_ONLY":
+                                scroll_action = "SCROLL_DOWN" # Content moves down = Next Reel
+                                print(f"ACTION: GREEN MODE -> NEXT")
                                 scroll_cooldown = current_time
                                 cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                                 
-                            # SWIPE DOWN (y increases) -> PREV REEL
-                            elif dy > swipe_threshold:
-                                scroll_action = "SCROLL_UP" # UI Prev
-                                print(f"ACTION: DYNAMIC SWIPE DOWN -> PREV")
+                            # SWIPE DOWN (y increase) -> PREV REEL (Only if mode is PREV_ONLY)
+                            elif dy > swipe_threshold and mode == "PREV_ONLY":
+                                scroll_action = "SCROLL_UP" # Content moves up = Prev Reel
+                                print(f"ACTION: RED MODE -> PREV")
                                 scroll_cooldown = current_time
                                 cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-                    prev_wrist_y = curr_y # Update previous position
+                    prev_wrist_y = curr_y 
                 else:
-                    prev_wrist_y = None # Reset tracking if hand closed or in volume zone
+                    prev_wrist_y = None
 
         # Emit gesture update (MOVED OUTSIDE hand detection to always emit current state)
         socketio.emit('gesture_update', {
