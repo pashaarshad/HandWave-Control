@@ -29,11 +29,12 @@ def generate_frames():
     global prev_wrist_y, scroll_cooldown, camera
     camera = cv2.VideoCapture(0)
     
-    # Scroll State
-    prev_finger_y = None
+    # Scroll State Machine
+    # We track if the finger is currently 'ABOVE' (y < 0.5) or 'BELOW' (y > 0.5) the line
+    last_position_state = None # "ABOVE" or "BELOW"
     
     # Volume State
-    current_volume_percent = 50 # Default start
+    current_volume_percent = 50 
     
     while True:
         success, frame = camera.read()
@@ -41,16 +42,15 @@ def generate_frames():
             break
 
         frame = cv2.flip(frame, 1)
-        # Get frame dimensions
         h, w, c = frame.shape
         
         # --- UI LAYOUT ---
-        # 1. SCROLL LINE (Right side/Main area)
+        # 1. SCROLL LINE (y=0.5)
         line_y = int(h * 0.5) 
-        cv2.line(frame, (int(w*0.3), line_y), (w, line_y), (0, 255, 255), 2) # Yellow Line
+        cv2.line(frame, (int(w*0.25), line_y), (w, line_y), (0, 255, 255), 2) # Yellow Line
         
-        # 2. VOLUME ZONE (Left side, 25%)
-        vol_zone_w = int(w * 0.25)
+        # 2. VOLUME ZONE (Left side, 20%)
+        vol_zone_w = int(w * 0.20)
         
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(frame_rgb)
@@ -62,64 +62,63 @@ def generate_frames():
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 
-                # Thumb Tip: 4, Index Tip: 8
                 thumb_tip = hand_landmarks.landmark[4]
                 index_tip = hand_landmarks.landmark[8]
                 
-                # --- CURSOR (Index Tip) ---
+                # --- CURSOR ---
                 cx_index, cy_index = int(index_tip.x * w), int(index_tip.y * h)
-                cv2.circle(frame, (cx_index, cy_index), 10, (0, 255, 255), -1) # Yellow Cursor
+                cv2.circle(frame, (cx_index, cy_index), 10, (0, 255, 255), -1) 
                 
                 # --- CHECK ZONE ---
-                # Check if cursor is in Volume Zone (Left side)
                 if cx_index < vol_zone_w:
                     is_in_vol_zone = True
-                    
-                    # --- VOLUME LOGIC (Active) ---
-                    # Calculate pinch distance
+                    # VOLUME LOGIC
                     distance = np.sqrt((thumb_tip.x - index_tip.x)**2 + (thumb_tip.y - index_tip.y)**2)
-                    
-                    # Map Distance
-                    min_dist = 0.02
-                    max_dist = 0.22
+                    min_dist, max_dist = 0.02, 0.22
                     vol_ratio = (distance - min_dist) / (max_dist - min_dist)
-                    vol_ratio = max(0.0, min(1.0, vol_ratio))
+                    current_volume_percent = int(max(0.0, min(1.0, vol_ratio)) * 100)
                     
-                    current_volume_percent = int(vol_ratio * 100)
-                    
-                    # Visual: Pinch Line
+                    # Visual
                     cx_thumb, cy_thumb = int(thumb_tip.x * w), int(thumb_tip.y * h)
                     cv2.line(frame, (cx_thumb, cy_thumb), (cx_index, cy_index), (0, 255, 0), 3)
-                    
                 else:
                     is_in_vol_zone = False
-                    # Volume remains LOCKED at last `current_volume_percent`
-                
-                
-                # --- SCROLL LOGIC ---
-                # Only scroll if NOT in volume zone (to avoid conflicts)
+
+                # --- SCROLL LOGIC (State Machine) ---
                 if not is_in_vol_zone:
                     curr_y = index_tip.y
                     current_time = time.time()
                     
-                    # Check crossing if we have a previous point and cooldown is over
-                    if prev_finger_y is not None and (current_time - scroll_cooldown) > 0.8:
-                        line_normalized = 0.5
-                        buffer = 0.04 # Reduced buffer for sensitivity
+                    # Determine current state relative to line (with small buffer)
+                    # Line is 0.5. 
+                    # ABOVE (< 0.45), BELOW (> 0.55), BUFFER (0.45-0.55)
+                    
+                    current_position_state = None
+                    if curr_y < 0.45:
+                        current_position_state = "ABOVE"
+                    elif curr_y > 0.55:
+                        current_position_state = "BELOW"
+                    
+                    # Check for State TRANSITION
+                    if last_position_state and current_position_state and (current_time - scroll_cooldown) > 0.5:
                         
-                        # Swipe UP (Bottom -> Top)
-                        if prev_finger_y > (line_normalized + buffer) and curr_y < (line_normalized - buffer):
-                            scroll_action = "SCROLL_DOWN" 
+                        # Transition: BELOW -> ABOVE (Swipe UP)
+                        if last_position_state == "BELOW" and current_position_state == "ABOVE":
+                            scroll_action = "SCROLL_DOWN" # Content moves down, meaning Next Item
+                            print(f"ACTION: SWIPE UP -> NEXT REEL")
                             scroll_cooldown = current_time
                             cv2.putText(frame, "NEXT", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                            
-                        # Swipe DOWN (Top -> Bottom)
-                        elif prev_finger_y < (line_normalized - buffer) and curr_y > (line_normalized + buffer):
-                            scroll_action = "SCROLL_UP"
+                        
+                        # Transition: ABOVE -> BELOW (Swipe DOWN)
+                        elif last_position_state == "ABOVE" and current_position_state == "BELOW":
+                            scroll_action = "SCROLL_UP" # Content moves up, meaning Prev Item
+                            print(f"ACTION: SWIPE DOWN -> PREV REEL")
                             scroll_cooldown = current_time
                             cv2.putText(frame, "PREV", (cx_index, cy_index), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-    
-                    prev_finger_y = curr_y
+
+                    # Only update state if we are decisively in a new zone
+                    if current_position_state:
+                         last_position_state = current_position_state
 
                 socketio.emit('gesture_update', {
                     'volume': current_volume_percent,
@@ -127,14 +126,13 @@ def generate_frames():
                 })
         
         # --- DRAW VISUALIZATIONS ---
-        # Draw Volume Zone Overlay
         overlay = frame.copy()
-        color = (0, 255, 0) if is_in_vol_zone else (50, 50, 50) # Green if active, Gray if idle
+        color = (0, 200, 0) if is_in_vol_zone else (30, 30, 30)
         cv2.rectangle(overlay, (0, 0), (vol_zone_w, h), color, -1)
         cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
         
-        cv2.putText(frame, "VOL ZONE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, f"{current_volume_percent}%", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 3)
+        cv2.putText(frame, "VOL ZONE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, f"{current_volume_percent}%", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
         ret, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
