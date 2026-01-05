@@ -133,9 +133,9 @@
     </div>
 
     <script type="text/javascript">
-        // FORCE WEBSOCKETS + Polling fallback
+        // Allow polling fallback since WebSockets are failing on Windows/Eventlet
         const socket = io({
-            transports: ['websocket', 'polling']
+            transports: ['polling', 'websocket']
         });
 
         // Mobile Demo State
