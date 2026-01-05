@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HandWave Control - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🖐️ HandWave Control</div>
+            <div class="status-indicator">
+                <span id="status-dot" class="dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Camera Feed Section -->
+            <section class="card camera-card">
+                <h2>Camera Feed</h2>
+                <div class="video-container">
+                    <img src="{{ url_for('video_feed') }}" alt="Camera Feed" class="live-feed">
+                    <div class="overlay">
+                        <div class="gesture-feedback" id="gesture-feedback">Waiting for hand...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controls & Visualization Section -->
+            <section class="card controls-card">
+                <h2>Live Data</h2>
+
+                <div class="control-group">
+                    <label>Volume Level</label>
+                    <div class="volume-bar-container">
+                        <div class="volume-bar-fill" id="volume-bar"></div>
+                    </div>
+                    <div class="volume-value" id="volume-text">0%</div>
+                </div>
+
+                <div class="control-group">
+                    <label>Recent Action</label>
+                    <div class="action-box" id="action-box">
+                        --
+                    </div>
+                </div>
+
+                <div class="navigation-buttons">
+                    <a href="/reels" class="btn primary-btn">Original Mock Reels Test 📱</a>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

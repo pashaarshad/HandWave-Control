@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HandWave - Mock Reels</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* Specific styles for the Reel scrolling mock */
+        body.reels-mode {
+            background-color: #000;
+            margin: 0;
+            overflow: hidden;
+            /* Hide standard browser scrollbar */
+        }
+
+        .reel-container {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+            /* Smooth scroll animation */
+        }
+
+        .reel {
+            min-height: 100vh;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            position: relative;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .reel:nth-child(1) {
+            background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+        }
+
+        .reel:nth-child(2) {
+            background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+        }
+
+        .reel:nth-child(3) {
+            background: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);
+            color: #333;
+        }
+
+        .reel:nth-child(4) {
+            background: linear-gradient(to right, #43e97b 0%, #38f9d7 100%);
+        }
+
+        .reel:nth-child(5) {
+            background: linear-gradient(to top, #30cfd0 0%, #330867 100%);
+        }
+
+        .overlay-ui {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            color: white;
+            width: 150px;
+        }
+
+        .mini-video {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 2px solid #555;
+        }
+
+        .vol-indicator {
+            height: 6px;
+            background: #444;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .vol-fill {
+            height: 100%;
+            width: 50%;
+            background: #00ff00;
+            transition: width 0.1s;
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            z-index: 1000;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="reels-mode">
+    <a href="/" class="back-btn">← Back to Dashboard</a>
+
+    <!-- Overlay widget to see camera and volume while testing -->
+    <div class="overlay-ui">
+        <img src="{{ url_for('video_feed') }}" class="mini-video">
+        <small>Volume</small>
+        <div class="vol-indicator">
+            <div class="vol-fill" id="reel-vol-bar"></div>
+        </div>
+        <div style="margin-top:5px; font-size: 0.8rem; text-align:center;" id="reel-status">
+            Wait...
+        </div>
+    </div>
+
+    <!-- The Reel Feed -->
+    <div class="reel-container" id="feed">
+        <div class="reel">
+            <div>
+                <h1>📱 Reel 1</h1>
+                <p style="font-size: 1rem;">Swipe UP to scroll down</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>🌊 Reel 2</h1>
+                <p style="font-size: 1rem;">Blue Vibes</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>☁️ Reel 3</h1>
+                <p style="font-size: 1rem;">Clean & White</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>🌿 Reel 4</h1>
+                <p style="font-size: 1rem;">Nature Green</p>
+            </div>
+        </div>
+        <div class="reel">
+            <div>
+                <h1>💜 Reel 5</h1>
+                <p style="font-size: 1rem;">Deep Purple</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // Connect to Python Backend
+        const socket = io();
+        
+        let currentReelIndex = 0;
+        const totalReels = 5;
+        const feed = document.getElementById('feed');
+        const volBar = document.Id('reel-vol-bar');
+        const statusText = document.getElementById('reel-status');
+
+        function updateScroll() {
+            // CSS Transform to slide the containen
+            // -100vh * index moves it to show the correct reel     feed.style.transform = `translateY(-${currentReelIndex * 100}vh)`;
+  
+        socket.on('connect', () => {
+             statusText.innerText = "Connected 🟢";
+             statusText.style.color = "#0f0";
+        });
+
+        socket.on('gesture_update', (data) => {
+        . Update Volume UI
+            volBar.style.width = data.volume + "%";
+
+            // 2. Handle Scroll Actions
+            if (oll === "SCROLL_DOWN") {
+                // User swiped HAND UP -> Content goes UP (Show Next)
+                if (currentReelIndex < totalReels - 1) {
+            currentReelIndex++;
+                    updateScroll();
+                    statusText.innerText = "Next Reel ⬇️";
+                }
+            } else if (data.scroll ===_UP") {
+                // User swiped HAND DOWN -> Content goes DOWN (Show Prev)
+                if (celIndex > 0) {
+                    currentReelIndex--;
+                    updateScroll();
+                    statnnerText = "Prev Reel ⬆️";
+                }
+            } else {
+                // If no scroll, show volume status
+                statusText.innerText = `Vol: ${data.volume}%`;
+                   // Clear status text after a moment
+            setTimeout(() => {
+                 if (statusText.innerText.includes("Reel")) {
+                     statusText.innerText = "Listening... 👂";
+                 }
+            }, 1500);
+        });
+    </script>
+</body>
+
+</html>
