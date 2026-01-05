@@ -10,7 +10,7 @@ import time
 
 # Initialize Flask app
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # --- MEDIAPIPE SETUP ---
 mp_hands = mp.solutions.hands
@@ -123,10 +123,13 @@ def generate_frames():
                     if current_position_state:
                          last_position_state = current_position_state
 
-                socketio.emit('gesture_update', {
-                    'volume': current_volume_percent,
-                    'scroll': scroll_action
-                })
+        # Emit gesture update (MOVED OUTSIDE hand detection to always emit current state)
+        socketio.emit('gesture_update', {
+            'volume': current_volume_percent,
+            'scroll': scroll_action
+        })
+        # Yield control to eventlet so socket can send
+        eventlet.sleep(0)
         
         # --- DRAW VISUALIZATIONS ---
         overlay = frame.copy()
