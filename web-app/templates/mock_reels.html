@@ -162,50 +162,67 @@
     <script type="text/javascript">
         // Connect to Python Backend
         const socket = io();
-        
+
         let currentReelIndex = 0;
         const totalReels = 5;
         const feed = document.getElementById('feed');
-        const volBar = document.Id('reel-vol-bar');
+        const volBar = document.getElementById('reel-vol-bar');
         const statusText = document.getElementById('reel-status');
 
         function updateScroll() {
-            // CSS Transform to slide the containen
-            // -100vh * index moves it to show the correct reel     feed.style.transform = `translateY(-${currentReelIndex * 100}vh)`;
-  
+            // CSS Transform to slide the container up/down
+            // -100vh * index moves it to show the correct reel
+            const translateY = -(currentReelIndex * 100);
+            feed.style.transform = `translateY(${translateY}vh)`;
+            console.log(`Updated scroll to Reel ${currentReelIndex + 1} (${translateY}vh)`);
+        }
+
         socket.on('connect', () => {
-             statusText.innerText = "Connected 🟢";
-             statusText.style.color = "#0f0";
+            statusText.innerText = "Connected 🟢";
+            statusText.style.color = "#0f0";
         });
 
         socket.on('gesture_update', (data) => {
-        . Update Volume UI
-            volBar.style.width = data.volume + "%";
+            // 1. Update Volume UI
+            if (data.volume !== undefined) {
+                volBar.style.width = data.volume + "%";
+                // Dynamic color for volume
+                if (data.volume < 20) volBar.style.backgroundColor = "red";
+                else volBar.style.backgroundColor = "#00ff00";
+            }
 
             // 2. Handle Scroll Actions
-            if (oll === "SCROLL_DOWN") {
-                // User swiped HAND UP -> Content goes UP (Show Next)
+            if (data.scroll === "SCROLL_DOWN") {
+                console.log("CMD: SCROLL_DOWN -> Next Slide");
                 if (currentReelIndex < totalReels - 1) {
-            currentReelIndex++;
+                    currentReelIndex++;
                     updateScroll();
-                    statusText.innerText = "Next Reel ⬇️";
+                    statusText.innerText = `Reel ${currentReelIndex + 1} ⬇️`;
+                } else {
+                    statusText.innerText = "End 🛑";
                 }
-            } else if (data.scroll ===_UP") {
-                // User swiped HAND DOWN -> Content goes DOWN (Show Prev)
-                if (celIndex > 0) {
+            } else if (data.scroll === "SCROLL_UP") {
+                console.log("CMD: SCROLL_UP -> Prev Slide");
+                if (currentReelIndex > 0) {
                     currentReelIndex--;
                     updateScroll();
-                    statnnerText = "Prev Reel ⬆️";
+                    statusText.innerText = `Reel ${currentReelIndex + 1} ⬆️`;
+                } else {
+                    statusText.innerText = "Top 🔝";
                 }
-            } else {
-                // If no scroll, show volume status
-                statusText.innerText = `Vol: ${data.volume}%`;
-                   // Clear status text after a moment
-            setTimeout(() => {
-                 if (statusText.innerText.includes("Reel")) {
-                     statusText.innerText = "Listening... 👂";
-                 }
-            }, 1500);
+            } else if (!data.scroll) {
+                // If no scroll, show volume status (unless transient status is showing)
+                if (!statusText.innerText.includes("Reel") && !statusText.innerText.includes("End") && !statusText.innerText.includes("Top")) {
+                    statusText.innerText = `Vol: ${data.volume}%`;
+                }
+            }
+
+            // Clear transient status text after a moment
+            if (data.scroll) {
+                setTimeout(() => {
+                    statusText.innerText = "Listening... 👂";
+                }, 1500);
+            }
         });
     </script>
 </body>
