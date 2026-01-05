@@ -4,10 +4,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HandWave Control - Dashboard</title>
+    <title>HandWave Control - Live Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* Embedding Mobile Demo directly */
+        .mobile-demo-frame {
+            width: 300px;
+            height: 600px;
+            border: 12px solid #333;
+            border-radius: 30px;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin: 0 auto;
+            /* Center it */
+        }
+
+        .mobile-screen {
+            width: 100%;
+            height: 100%;
+            transition: background 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+            padding: 20px;
+            box-sizing: border-box;
+            background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%);
+        }
+
+        .gesture-log {
+            font-family: monospace;
+            background: #1e293b;
+            color: #0f0;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 
 <body>
@@ -21,44 +62,127 @@
         </header>
 
         <main class="dashboard-grid">
-            <!-- Camera Feed Section -->
+            <!-- Left: Camera Feed & Logs -->
             <section class="card camera-card">
-                <h2>Camera Feed</h2>
+                <h2>Live Camera Feed</h2>
                 <div class="video-container">
                     <img src="{{ url_for('video_feed') }}" alt="Camera Feed" class="live-feed">
-                    <div class="overlay">
-                        <div class="gesture-feedback" id="gesture-feedback">Waiting for hand...</div>
-                    </div>
+                </div>
+
+                <h3>Live Gesture Log</h3>
+                <div class="gesture-log" id="gesture-log">
+                    <div>System ready...</div>
                 </div>
             </section>
 
-            <!-- Controls & Visualization Section -->
+            <!-- Right: Controls & Mobile Demo -->
             <section class="card controls-card">
                 <h2>Live Data</h2>
 
                 <div class="control-group">
-                    <label>Volume Level</label>
+                    <label>Volume Level (Live)</label>
                     <div class="volume-bar-container">
-                        <div class="volume-bar-fill" id="volume-bar"></div>
+                        <div class="volume-bar-fill" id="volume-bar" style="width: 50%;"></div>
                     </div>
-                    <div class="volume-value" id="volume-text">0%</div>
+                    <div class="volume-value" id="volume-text">50%</div>
                 </div>
 
                 <div class="control-group">
-                    <label>Recent Action</label>
-                    <div class="action-box" id="action-box">
-                        --
+                    <label>Mobile Reel Demo</label>
+                    <div class="mobile-demo-frame">
+                        <div class="mobile-screen" id="mobile-screen">
+                            <h1 id="screen-title">Reel 1</h1>
+                            <p id="screen-desc">Swipe UP for Next</p>
+                        </div>
                     </div>
-                </div>
-
-                <div class="navigation-buttons">
-                    <a href="/reels" class="btn primary-btn">Original Mock Reels Test 📱</a>
                 </div>
             </section>
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script type="text/javascript">
+        const socket = io();
+
+        // Mobile Demo State
+        const colors = [
+            "linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%)", // Reel 1
+            "linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)", // Reel 2
+            "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)", // Reel 3
+            "linear-gradient(to right, #43e97b 0%, #38f9d7 100%)", // Reel 4
+            "linear-gradient(to top, #30cfd0 0%, #330867 100%)", // Reel 5
+            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", // Reel 6
+            "linear-gradient(to right, #fa709a 0%, #fee140 100%)", // Reel 7
+            "linear-gradient(to top, #0ba360 0%, #3cba92 100%)", // Reel 8
+            "linear-gradient(-225deg, #2CD8D5 0%, #C5C1FF 56%, #FFBAC3 100%)", // Reel 9
+            "linear-gradient(to right, #b8cbb8 0%, #b8cbb8 0%, #b465da 0%, #cf6cc9 33%, #ee609c 66%, #ee609c 100%)" // Reel 10
+        ];
+
+        let reelIndex = 0;
+        const totalReels = colors.length;
+
+        // DOM Elements
+        const mobileScreen = document.getElementById('mobile-screen');
+        const screenTitle = document.getElementById('screen-title');
+        const screenDesc = document.getElementById('screen-desc');
+        const volBar = document.getElementById('volume-bar');
+        const volText = document.getElementById('volume-text');
+        const logBox = document.getElementById('gesture-log');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+
+        function log(msg) {
+            const div = document.createElement('div');
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logBox.prepend(div);
+            // keep log short
+            if (logBox.children.length > 50) logBox.lastChild.remove();
+        }
+
+        function updateMobileScreen() {
+            mobileScreen.style.background = colors[reelIndex];
+            screenTitle.innerText = `Reel ${reelIndex + 1}`;
+
+            // animation effect
+            mobileScreen.style.opacity = 0.5;
+            setTimeout(() => mobileScreen.style.opacity = 1, 200);
+        }
+
+        socket.on('connect', () => {
+            statusText.innerText = "Connected 🟢";
+            statusDot.classList.add('connected');
+            log("System Connected.");
+        });
+
+        socket.on('gesture_update', (data) => {
+            // 1. Update Volume
+            if (data.volume !== undefined) {
+                volBar.style.width = data.volume + "%";
+                volText.innerText = data.volume + "%";
+                // Color change based on level
+                if (data.volume < 20) volBar.style.background = "linear-gradient(90deg, #ff9a9e 0%, #fecfef 100%)";
+                else volBar.style.background = "linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)";
+            }
+
+            // 2. Scroll Update
+            if (data.scroll === "SCROLL_DOWN") {
+                if (reelIndex < totalReels - 1) {
+                    reelIndex++;
+                    updateMobileScreen();
+                    log(`ACTION: Next Reel (${reelIndex + 1}) ⬇️`);
+                } else {
+                    log("End of Reels 🛑");
+                }
+            } else if (data.scroll === "SCROLL_UP") {
+                if (reelIndex > 0) {
+                    reelIndex--;
+                    updateMobileScreen();
+                    log(`ACTION: Prev Reel (${reelIndex + 1}) ⬆️`);
+                } else {
+                    log("Start of Reels 🔝");
+                }
+            }
+        });
+    </script>
 </body>
 
 </html>
