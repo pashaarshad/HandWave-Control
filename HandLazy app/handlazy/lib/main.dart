@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'test_screen.dart';
+import 'splash_screen.dart';
+import 'services/background_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +16,7 @@ class HandLazyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'HandLazy',
+      title: 'HandLazy - by Arshad Pasha',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0D1117),
@@ -24,7 +26,7 @@ class HandLazyApp extends StatelessWidget {
           secondary: Color(0xFF1F6FEB),
         ),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(nextScreen: HomeScreen()),
     );
   }
 }
@@ -38,11 +40,20 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _cameraGranted = false;
+  bool _backgroundRunning = false;
+  final BackgroundGestureService _bgService = BackgroundGestureService();
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
+    _initializeAll();
+  }
+
+  Future<void> _initializeAll() async {
+    await _checkPermissions();
+    await _bgService.initialize();
+    _backgroundRunning = await _bgService.checkRunning();
+    if (mounted) setState(() {});
   }
 
   Future<void> _checkPermissions() async {
@@ -57,9 +68,39 @@ class _HomeScreenState extends State<HomeScreen> {
       Get.snackbar(
         "✅ Success",
         "Camera permission granted!",
-        backgroundColor: Colors.green.withOpacity(0.8),
+        backgroundColor: Colors.green.withAlpha(200),
       );
     }
+  }
+
+  Future<void> _toggleBackgroundService() async {
+    if (!_cameraGranted) {
+      Get.snackbar(
+        "⚠️ Permission Required",
+        "Please grant camera permission first",
+        backgroundColor: Colors.orange.withAlpha(200),
+      );
+      return;
+    }
+
+    if (_backgroundRunning) {
+      await _bgService.stop();
+      Get.snackbar(
+        "🛑 Stopped",
+        "Background gesture control stopped",
+        backgroundColor: Colors.red.withAlpha(200),
+      );
+    } else {
+      await _bgService.start();
+      Get.snackbar(
+        "🚀 Activated!",
+        "Gesture control running in background",
+        backgroundColor: Colors.green.withAlpha(200),
+      );
+    }
+
+    _backgroundRunning = await _bgService.checkRunning();
+    setState(() {});
   }
 
   @override
@@ -100,6 +141,15 @@ class _HomeScreenState extends State<HomeScreen> {
               const Text(
                 "Touchless Gesture Control",
                 style: TextStyle(fontSize: 16, color: Colors.white54),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "by Arshad Pasha",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.deepPurple.shade200,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
 
               const SizedBox(height: 40),
@@ -231,22 +281,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 56,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1F6FEB),
+                    backgroundColor: _backgroundRunning
+                        ? Colors.red
+                        : const Color(0xFF1F6FEB),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
-                    Get.snackbar(
-                      "🚀 Coming Soon",
-                      "Background mode will be enabled after testing!",
-                      backgroundColor: Colors.blue.withOpacity(0.8),
-                    );
-                  },
-                  icon: const Icon(Icons.play_circle_fill, color: Colors.white),
-                  label: const Text(
-                    "🚀 ACTIVATE BACKGROUND",
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  onPressed: _cameraGranted ? _toggleBackgroundService : null,
+                  icon: Icon(
+                    _backgroundRunning
+                        ? Icons.stop_circle
+                        : Icons.play_circle_fill,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _backgroundRunning
+                        ? "🛑 STOP BACKGROUND"
+                        : "🚀 ACTIVATE BACKGROUND",
+                    style: const TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
               ),
