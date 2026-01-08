@@ -33,7 +33,7 @@ class _TestScreenState extends State<TestScreen> {
   // Landmarks for skeleton
   List<Offset>? _landmarks;
 
-  // Swipe detection check
+  // Swipe detection check // working perfice arshad
   double? _prevIndexY;
   double _lastActionTime = 0;
 
