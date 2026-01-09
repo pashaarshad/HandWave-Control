@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'test_screen.dart';
 import 'splash_screen.dart';
 import 'services/background_service.dart';
@@ -45,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _cameraGranted = false;
   bool _backgroundRunning = false;
   bool _accessibilityEnabled = false;
+  bool _overlayGranted = false;
   final BackgroundGestureService _bgService = BackgroundGestureService();
   final GestureController _gestureController = GestureController();
 
@@ -59,7 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
     await _bgService.initialize();
     _backgroundRunning = await _bgService.checkRunning();
     _accessibilityEnabled = await _gestureController.isAccessibilityEnabled();
+    _overlayGranted = await FlutterOverlayWindow.isPermissionGranted();
     _listenToBackgroundService();
+    _listenToOverlayData();
     if (mounted) setState(() {});
   }
 
@@ -67,6 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
     FlutterBackgroundService().on('gesture').listen((event) {
       if (event == null) return;
       final type = event['type'] as String?;
+      final message = event['message'] as String?;
+
+      if (message != null) {
+        _gestureController.showToast(message);
+      }
 
       switch (type) {
         case 'NEXT_REEL':
@@ -78,6 +87,24 @@ class _HomeScreenState extends State<HomeScreen> {
         case 'VOLUME':
           final volume = event['value'] as int? ?? 50;
           _gestureController.setVolume(volume);
+          break;
+      }
+    });
+  }
+
+  void _listenToOverlayData() {
+    FlutterOverlayWindow.overlayListener.listen((data) {
+      if (data == null) return;
+
+      switch (data) {
+        case "START":
+          _bgService.start();
+          break;
+        case "STOP":
+          _bgService.stop();
+          break;
+        case "OPEN_APP":
+          // App is already open, just bring to front
           break;
       }
     });
@@ -142,15 +169,76 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // Check for battery optimizations (Critical for background stability on POCO/Xiaomi)
+    final ignoreBattery = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!ignoreBattery) {
+      Get.dialog(
+        AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          title: const Text("🔋 Battery Optimization"),
+          content: const Text(
+            "To keep HandLazy running in the background, please allow it to ignore battery optimizations.\n\n"
+            "This prevents the system from killing the app while you're scrolling.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(),
+              child: const Text("Skip (Not Recommended)"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Get.back();
+                await Permission.ignoreBatteryOptimizations.request();
+              },
+              child: const Text("Allow"),
+            ),
+          ],
+        ),
+      );
+      // We don't return here, we proceed after the dialog is shown/dismissed (user choice)
+      // Ideally we would wait, but for UX flow we just prompt once.
+    }
+
+    // Check overlay permission
+    _overlayGranted = await FlutterOverlayWindow.isPermissionGranted();
+    if (!_overlayGranted) {
+      await FlutterOverlayWindow.requestPermission();
+      _overlayGranted = await FlutterOverlayWindow.isPermissionGranted();
+      if (!_overlayGranted) {
+        Get.snackbar(
+          "⚠️ Overlay Permission",
+          "Please allow overlay permission for floating indicator",
+          backgroundColor: Colors.orange.withAlpha(200),
+        );
+      }
+    }
+
     if (_backgroundRunning) {
+      // Stop service and hide overlay
       await _bgService.stop();
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
       Get.snackbar(
         "🛑 Stopped",
         "Background gesture control stopped",
         backgroundColor: Colors.red.withAlpha(200),
       );
     } else {
+      // Start service and show overlay
       await _bgService.start();
+      if (_overlayGranted && !(await FlutterOverlayWindow.isActive())) {
+        await FlutterOverlayWindow.showOverlay(
+          enableDrag: true,
+          overlayTitle: "HandLazy",
+          overlayContent: "Gesture Control Active",
+          flag: OverlayFlag.defaultFlag,
+          visibility: NotificationVisibility.visibilityPublic,
+          positionGravity: PositionGravity.auto,
+          height: 150,
+          width: 180,
+        );
+      }
       Get.snackbar(
         "🚀 Activated!",
         "Gesture control running in background",

@@ -55,4 +55,13 @@ class GestureController {
       return false;
     }
   }
+
+  /// Show toast message (useful for background feedback)
+  Future<void> showToast(String message) async {
+    try {
+      await _channel.invokeMethod('showToast', {'message': message});
+    } catch (e) {
+      // Ignore
+    }
+  }
 }

@@ -174,13 +174,20 @@ void onStart(ServiceInstance service) async {
             lastVolumeChange = now;
 
             // Send volume update
-            service.invoke('gesture', {'type': 'VOLUME', 'value': volume});
+            service.invoke('gesture', {
+              'type': 'VOLUME',
+              'value': volume,
+              'message': '🔊 Volume: $volume%',
+            });
           }
         } else if (isOpen) {
           lastGesture = "OPEN";
           if (now - lastActionTime > 0.8) {
             lastActionTime = now;
-            service.invoke('gesture', {'type': 'PREV_REEL'});
+            service.invoke('gesture', {
+              'type': 'PREV_REEL',
+              'message': '🖐️ Prev Reel',
+            });
           }
         } else {
           lastGesture = "POINTING";
@@ -190,7 +197,10 @@ void onStart(ServiceInstance service) async {
             double dy = indexTip.y - prevIndexY!;
             if (dy < -0.06) {
               lastActionTime = now;
-              service.invoke('gesture', {'type': 'NEXT_REEL'});
+              service.invoke('gesture', {
+                'type': 'NEXT_REEL',
+                'message': '☝️ Next Reel',
+              });
             }
           }
         }

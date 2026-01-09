@@ -16,12 +16,32 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isAccessibilityEnabled" -> {
-                    result.success(GestureAccessibilityService.isServiceEnabled())
+                    // Robust check using system service list
+                    var enabled = false
+                    val prefString = Settings.Secure.getString(
+                        contentResolver,
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                    )
+                    if (prefString != null) {
+                        enabled = prefString.contains("$packageName/${GestureAccessibilityService::class.java.canonicalName}")
+                    }
+                    // Fallback to static instance check if string check fails but instance exists
+                    if (!enabled && GestureAccessibilityService.isServiceEnabled()) {
+                        enabled = true
+                    }
+                    result.success(enabled)
                 }
                 "openAccessibilitySettings" -> {
                     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     startActivity(intent)
+                    result.success(true)
+                }
+                "showToast" -> {
+                    val message = call.argument<String>("message")
+                    if (message != null) {
+                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                    }
                     result.success(true)
                 }
                 "swipeUp" -> {
