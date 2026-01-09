@@ -83,6 +83,7 @@ void onStart(ServiceInstance service) async {
   bool volumeIncreasing = true;
   bool wasPinching = false;
   double lastVolumeChange = 0;
+  bool isPaused = false;
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
@@ -98,6 +99,28 @@ void onStart(ServiceInstance service) async {
       handLandmarker?.dispose();
       await service.stopSelf();
     });
+
+    service.on('pause').listen((event) {
+      isPaused = true;
+      service.setForegroundNotificationInfo(
+        title: "HandLazy ⏸️ PAUSED",
+        content: "Gesture detection paused",
+      );
+    });
+
+    service.on('resume').listen((event) {
+      isPaused = false;
+      service.setForegroundNotificationInfo(
+        title: "HandLazy ▶️ ACTIVE",
+        content: "Detecting gestures...",
+      );
+    });
+
+    // Set initial notification
+    service.setForegroundNotificationInfo(
+      title: "HandLazy ▶️ ACTIVE",
+      content: "Detecting gestures...",
+    );
   }
 
   // Initialize ML model
@@ -129,7 +152,7 @@ void onStart(ServiceInstance service) async {
 
   // Process frames
   controller.startImageStream((image) async {
-    if (isProcessing || handLandmarker == null) return;
+    if (isProcessing || handLandmarker == null || isPaused) return;
     isProcessing = true;
 
     try {

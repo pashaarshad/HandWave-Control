@@ -309,6 +309,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontStyle: FontStyle.italic,
                 ),
               ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withAlpha(50),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  "v10.2",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.deepPurpleAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 40),
 
