@@ -6,6 +6,7 @@ import 'test_screen.dart';
 import 'splash_screen.dart';
 import 'services/background_service.dart';
 import 'services/gesture_controller.dart';
+import 'screens/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -170,7 +171,18 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 40),
+              // Settings Button Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    onPressed: () => Get.to(() => const SettingsScreen()),
+                    icon: const Icon(Icons.settings, color: Colors.white54),
+                    tooltip: 'Settings',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
 
               // Logo
               Container(
