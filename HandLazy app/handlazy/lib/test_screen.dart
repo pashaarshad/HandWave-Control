@@ -42,6 +42,9 @@ class _TestScreenState extends State<TestScreen> {
   bool _wasPinching = false; // was pinching in previous frame
   double _lastVolumeChange = 0; // debounce volume changes
 
+  // Camera aspect ratio for skeleton alignment
+  double _cameraAspectRatio = 1.0;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +76,9 @@ class _TestScreenState extends State<TestScreen> {
         enableAudio: false,
       );
       await _controller!.initialize();
+
+      // Store camera aspect ratio for skeleton alignment
+      _cameraAspectRatio = _controller!.value.aspectRatio;
 
       setState(() => _debugStatus = "Ready! Tap START");
     } catch (e) {
@@ -210,6 +216,24 @@ class _TestScreenState extends State<TestScreen> {
     return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
   }
 
+  // Transform normalized cursor position to screen coordinates with aspect ratio correction
+  Offset _getCursorPosition(Size size) {
+    double screenAspect = size.width / size.height;
+    double scaleX, scaleY, offsetX = 0, offsetY = 0;
+
+    if (_cameraAspectRatio > screenAspect) {
+      scaleX = size.width;
+      scaleY = size.width / _cameraAspectRatio;
+      offsetY = (size.height - scaleY) / 2;
+    } else {
+      scaleY = size.height;
+      scaleX = size.height * _cameraAspectRatio;
+      offsetX = (size.width - scaleX) / 2;
+    }
+
+    return Offset(offsetX + _cursorX * scaleX, offsetY + _cursorY * scaleY);
+  }
+
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -253,30 +277,39 @@ class _TestScreenState extends State<TestScreen> {
                 if (_landmarks != null)
                   CustomPaint(
                     size: size,
-                    painter: HandSkeletonPainter(_landmarks!, _modeColor),
+                    painter: HandSkeletonPainter(
+                      _landmarks!,
+                      _modeColor,
+                      _cameraAspectRatio,
+                    ),
                   ),
 
                 // Yellow Cursor
                 if (_showCursor)
-                  Positioned(
-                    left: _cursorX * size.width - 20,
-                    top: _cursorY * size.height - 20,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.yellow,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.orange, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.yellow.withAlpha(150),
-                            blurRadius: 20,
-                            spreadRadius: 5,
+                  Builder(
+                    builder: (context) {
+                      final cursorPos = _getCursorPosition(size);
+                      return Positioned(
+                        left: cursorPos.dx - 20,
+                        top: cursorPos.dy - 20,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.yellow,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.orange, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.yellow.withAlpha(150),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
 
                 // Top Bar
@@ -439,8 +472,9 @@ class _TestScreenState extends State<TestScreen> {
 class HandSkeletonPainter extends CustomPainter {
   final List<Offset> landmarks;
   final Color color;
+  final double cameraAspectRatio;
 
-  HandSkeletonPainter(this.landmarks, this.color);
+  HandSkeletonPainter(this.landmarks, this.color, this.cameraAspectRatio);
 
   static const connections = [
     [0, 1],
@@ -468,6 +502,30 @@ class HandSkeletonPainter extends CustomPainter {
     [13, 17],
   ];
 
+  Offset _transformPoint(Offset normalized, Size size) {
+    // Calculate screen aspect ratio
+    double screenAspect = size.width / size.height;
+
+    double scaleX, scaleY, offsetX = 0, offsetY = 0;
+
+    if (cameraAspectRatio > screenAspect) {
+      // Camera is wider - scaled to fit width, letterbox on top/bottom
+      scaleX = size.width;
+      scaleY = size.width / cameraAspectRatio;
+      offsetY = (size.height - scaleY) / 2;
+    } else {
+      // Camera is taller - scaled to fit height, letterbox on sides
+      scaleY = size.height;
+      scaleX = size.height * cameraAspectRatio;
+      offsetX = (size.width - scaleX) / 2;
+    }
+
+    return Offset(
+      offsetX + normalized.dx * scaleX,
+      offsetY + normalized.dy * scaleY,
+    );
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
@@ -481,23 +539,14 @@ class HandSkeletonPainter extends CustomPainter {
 
     for (var conn in connections) {
       if (conn[0] < landmarks.length && conn[1] < landmarks.length) {
-        final p1 = Offset(
-          landmarks[conn[0]].dx * size.width,
-          landmarks[conn[0]].dy * size.height,
-        );
-        final p2 = Offset(
-          landmarks[conn[1]].dx * size.width,
-          landmarks[conn[1]].dy * size.height,
-        );
+        final p1 = _transformPoint(landmarks[conn[0]], size);
+        final p2 = _transformPoint(landmarks[conn[1]], size);
         canvas.drawLine(p1, p2, linePaint);
       }
     }
 
     for (int i = 0; i < landmarks.length; i++) {
-      final p = Offset(
-        landmarks[i].dx * size.width,
-        landmarks[i].dy * size.height,
-      );
+      final p = _transformPoint(landmarks[i], size);
       double r = [4, 8, 12, 16, 20].contains(i) ? 8 : 5;
       canvas.drawCircle(p, r, dotPaint);
       canvas.drawCircle(p, r, linePaint);

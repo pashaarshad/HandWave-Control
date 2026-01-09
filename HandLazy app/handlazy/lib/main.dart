@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'test_screen.dart';
 import 'splash_screen.dart';
 import 'services/background_service.dart';
+import 'services/gesture_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +43,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _cameraGranted = false;
   bool _backgroundRunning = false;
+  bool _accessibilityEnabled = false;
   final BackgroundGestureService _bgService = BackgroundGestureService();
+  final GestureController _gestureController = GestureController();
 
   @override
   void initState() {
@@ -53,7 +57,29 @@ class _HomeScreenState extends State<HomeScreen> {
     await _checkPermissions();
     await _bgService.initialize();
     _backgroundRunning = await _bgService.checkRunning();
+    _accessibilityEnabled = await _gestureController.isAccessibilityEnabled();
+    _listenToBackgroundService();
     if (mounted) setState(() {});
+  }
+
+  void _listenToBackgroundService() {
+    FlutterBackgroundService().on('gesture').listen((event) {
+      if (event == null) return;
+      final type = event['type'] as String?;
+
+      switch (type) {
+        case 'NEXT_REEL':
+          _gestureController.swipeUp();
+          break;
+        case 'PREV_REEL':
+          _gestureController.swipeDown();
+          break;
+        case 'VOLUME':
+          final volume = event['value'] as int? ?? 50;
+          _gestureController.setVolume(volume);
+          break;
+      }
+    });
   }
 
   Future<void> _checkPermissions() async {
@@ -79,6 +105,38 @@ class _HomeScreenState extends State<HomeScreen> {
         "⚠️ Permission Required",
         "Please grant camera permission first",
         backgroundColor: Colors.orange.withAlpha(200),
+      );
+      return;
+    }
+
+    // Check accessibility service
+    _accessibilityEnabled = await _gestureController.isAccessibilityEnabled();
+    if (!_accessibilityEnabled) {
+      Get.dialog(
+        AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          title: const Text("🔐 Enable Accessibility"),
+          content: const Text(
+            "To control other apps (Instagram, YouTube, etc.), you need to enable HandLazy in Accessibility Settings.\n\n"
+            "1. Tap 'Open Settings'\n"
+            "2. Find 'HandLazy Gesture Control'\n"
+            "3. Enable the toggle\n"
+            "4. Come back and try again",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Get.back(),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Get.back();
+                _gestureController.openAccessibilitySettings();
+              },
+              child: const Text("Open Settings"),
+            ),
+          ],
+        ),
       );
       return;
     }
