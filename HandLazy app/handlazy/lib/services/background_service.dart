@@ -5,6 +5,7 @@ import 'package:flutter_background_service_android/flutter_background_service_an
 import 'package:camera/camera.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 import 'dart:math';
+import 'gesture_controller.dart';
 
 class BackgroundGestureService {
   static final BackgroundGestureService _instance =
@@ -95,6 +96,7 @@ void onStart(ServiceInstance service) async {
     });
 
     service.on('stopService').listen((event) async {
+      GestureController().hideCursor(); // Remove yellow dot
       controller?.dispose();
       handLandmarker?.dispose();
       await service.stopSelf();
@@ -231,6 +233,10 @@ void onStart(ServiceInstance service) async {
         wasPinching = isPinching;
         prevIndexY = indexTip.y;
 
+        // Send cursor position to native overlay (Yellow Dot)
+        // Flip X for mirror effect (1.0 - x)
+        GestureController().updateCursor(1.0 - indexTip.x, indexTip.y);
+
         // Update notification
         if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
@@ -239,6 +245,7 @@ void onStart(ServiceInstance service) async {
           );
         }
       }
+      // Removed hideCursor() to keep yellow dot persistent as requested
     } catch (e) {
       // Ignore frame errors
     }

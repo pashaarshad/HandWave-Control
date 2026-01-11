@@ -57,6 +57,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initializeAll() async {
+    // Initialize GestureController with callback for accessibility status changes
+    _gestureController.initialize(
+      onAccessibilityStatusChanged: (enabled) {
+        if (mounted) {
+          setState(() {
+            _accessibilityEnabled = enabled;
+          });
+          if (enabled) {
+            Get.snackbar(
+              "✅ Accessibility Enabled",
+              "HandLazy Gesture Control is now ready!",
+              backgroundColor: Colors.green.withAlpha(200),
+            );
+          }
+        }
+      },
+    );
+
     await _checkPermissions();
     await _bgService.initialize();
     _backgroundRunning = await _bgService.checkRunning();
@@ -140,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Check accessibility service
     _accessibilityEnabled = await _gestureController.isAccessibilityEnabled();
     if (!_accessibilityEnabled) {
-      Get.dialog(
+      final result = await Get.dialog<bool>(
         AlertDialog(
           backgroundColor: const Color(0xFF161B22),
           title: const Text("🔐 Enable Accessibility"),
@@ -149,16 +167,23 @@ class _HomeScreenState extends State<HomeScreen> {
             "1. Tap 'Open Settings'\n"
             "2. Find 'HandLazy Gesture Control'\n"
             "3. Enable the toggle\n"
-            "4. Come back and try again",
+            "4. Come back and try again\n\n"
+            "If you've already enabled it, tap 'Continue Anyway'.",
           ),
           actions: [
             TextButton(
-              onPressed: () => Get.back(),
+              onPressed: () => Get.back(result: false),
               child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                Get.back(result: true);
+              },
+              child: const Text("Continue Anyway"),
             ),
             ElevatedButton(
               onPressed: () {
-                Get.back();
+                Get.back(result: false);
                 _gestureController.openAccessibilitySettings();
               },
               child: const Text("Open Settings"),
@@ -166,7 +191,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       );
-      return;
+      if (result != true) {
+        return;
+      }
+      // User chose to continue anyway
     }
 
     // Check for battery optimizations (Critical for background stability on POCO/Xiaomi)
@@ -320,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  "v10.2",
+                  "v11.2",
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.deepPurpleAccent,
