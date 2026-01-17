@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">HandLazy</string>
-    <string name="accessibility_service_description">HandLazy uses this service to perform scroll and swipe gestures on other apps based on your hand movements. Enable this to control Instagram Reels, YouTube Shorts, and other apps with hand gestures.</string>
-</resources>

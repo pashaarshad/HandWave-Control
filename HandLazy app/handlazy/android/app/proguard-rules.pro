@@ -1,3 +1,0 @@
--keep class org.tensorflow.lite.** { *; }
--keep class tflite.** { *; }
--dontwarn org.tensorflow.lite.**
