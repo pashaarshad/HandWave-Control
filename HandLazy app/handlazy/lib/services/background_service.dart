@@ -24,10 +24,11 @@ class BackgroundGestureService {
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStart: false,
+        autoStartOnBoot: true, // Auto-restart on device boot
         isForegroundMode: true,
         notificationChannelId: 'handlazy_channel',
-        initialNotificationTitle: 'HandLazy Active',
-        initialNotificationContent: 'Gesture control is running',
+        initialNotificationTitle: 'HandLazy Active ✋',
+        initialNotificationContent: 'Gesture control is running in background',
         foregroundServiceNotificationId: 888,
         foregroundServiceTypes: [AndroidForegroundType.camera],
       ),

@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-/// Interactive floating overlay widget with ON/OFF controls
+/// Interactive floating overlay widget with ON/OFF controls and live timer
 class FloatingIndicator extends StatefulWidget {
   const FloatingIndicator({super.key});
 
@@ -12,7 +13,41 @@ class FloatingIndicator extends StatefulWidget {
 class _FloatingIndicatorState extends State<FloatingIndicator> {
   bool _expanded = false;
   bool _isActive = true;
-  String _lastGesture = "Ready";
+  int _elapsedSeconds = 0;
+  Timer? _timer;
+  DateTime? _startTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _startTime = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_isActive && mounted) {
+        setState(() {
+          _elapsedSeconds = DateTime.now().difference(_startTime!).inSeconds;
+        });
+      }
+    });
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    if (minutes > 0) {
+      return '${minutes}m ${secs}s';
+    }
+    return '${secs}s';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,8 +59,8 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: _expanded ? 180 : 65,
-          height: _expanded ? 150 : 65,
+          width: _expanded ? 180 : 70,
+          height: _expanded ? 160 : 70,
           decoration: BoxDecoration(
             // GREEN for active, RED for stopped
             gradient: LinearGradient(
@@ -35,7 +70,7 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(_expanded ? 16 : 32),
+            borderRadius: BorderRadius.circular(_expanded ? 16 : 35),
             border: Border.all(
               color: _isActive ? Colors.greenAccent : Colors.redAccent,
               width: 3,
@@ -61,16 +96,25 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.pan_tool_alt, color: Colors.white, size: 28),
+          const Icon(Icons.pan_tool_alt, color: Colors.white, size: 22),
           const SizedBox(height: 2),
           Text(
             _isActive ? "ON" : "OFF",
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
           ),
+          if (_isActive)
+            Text(
+              _formatTime(_elapsedSeconds),
+              style: TextStyle(
+                color: Colors.white.withAlpha(200),
+                fontSize: 8,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
         ],
       ),
     );
@@ -86,11 +130,11 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              const Row(
                 children: [
                   Icon(Icons.pan_tool_alt, color: Colors.white, size: 18),
-                  const SizedBox(width: 6),
-                  const Text(
+                  SizedBox(width: 6),
+                  Text(
                     "HandLazy",
                     style: TextStyle(
                       color: Colors.white,
@@ -113,9 +157,9 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          // Status with big indicator
+          // Status with timer
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -125,27 +169,42 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
             child: Row(
               children: [
                 Container(
-                  width: 12,
-                  height: 12,
+                  width: 10,
+                  height: 10,
                   decoration: BoxDecoration(
                     color: _isActive ? Colors.greenAccent : Colors.redAccent,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
                         color: _isActive ? Colors.green : Colors.red,
-                        blurRadius: 8,
-                        spreadRadius: 2,
+                        blurRadius: 6,
+                        spreadRadius: 1,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _isActive ? "ACTIVE" : "STOPPED",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isActive ? "ACTIVE" : "STOPPED",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (_isActive)
+                        Text(
+                          "Running: ${_formatTime(_elapsedSeconds)}",
+                          style: TextStyle(
+                            color: Colors.white.withAlpha(180),
+                            fontSize: 9,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -160,7 +219,13 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    setState(() => _isActive = !_isActive);
+                    setState(() {
+                      _isActive = !_isActive;
+                      if (_isActive) {
+                        _startTime = DateTime.now();
+                        _elapsedSeconds = 0;
+                      }
+                    });
                     FlutterOverlayWindow.shareData(
                       _isActive ? "START" : "STOP",
                     );

@@ -348,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  "v12.0",
+                  "v12.1",
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.deepPurpleAccent,
