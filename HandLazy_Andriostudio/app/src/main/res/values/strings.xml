@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">HandLazy</string>
+    <string name="accessibility_service_description">Control your device with hand gestures.</string>
+    <string name="notification_channel_name">Hand Tracking Service</string>
+    <string name="notification_title">Hand Control Active</string>
+    <string name="notification_content">Camera is tracking your gestures...</string>
+</resources>
