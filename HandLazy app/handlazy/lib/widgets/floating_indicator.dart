@@ -22,9 +22,9 @@ class _FloatingIndicatorState extends State<FloatingIndicator> {
     super.initState();
     _startTimer();
   }
-
+ 
   @override
-  void dispose() {
+  void dispose() { 
     _timer?.cancel();
     super.dispose();
   }
