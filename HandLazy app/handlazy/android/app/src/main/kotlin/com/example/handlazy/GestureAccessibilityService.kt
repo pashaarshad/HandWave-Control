@@ -73,119 +73,27 @@ class GestureAccessibilityService : AccessibilityService() {
         Log.d(TAG, "Accessibility Service Destroyed")
     }
 
-    // ==================== CURSOR OVERLAY ====================
+    // ==================== CURSOR OVERLAY (DISABLED for v13.0) ====================
+    // User requested floating camera preview instead of yellow dot.
     
     private fun createCursorView(): View {
-        val view = View(this)
-        val drawable = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.YELLOW)
-            setStroke(3, Color.RED)
-        }
-        view.background = drawable
-        return view
+        return View(this) // Dummy
     }
 
-
     fun showCursor() {
-        mainHandler.post {
-            if (cursorView == null) {
-                cursorView = createCursorView()
-                
-                val size = (cursorSize * Resources.getSystem().displayMetrics.density).toInt()
-                
-                cursorParams = WindowManager.LayoutParams(
-                    size,
-                    size,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-                    else
-                        WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                    PixelFormat.TRANSLUCENT
-                ).apply {
-                    gravity = Gravity.TOP or Gravity.START
-                    x = 0
-                    y = 0
-                }
-
-                try {
-                    windowManager.addView(cursorView, cursorParams)
-                    Log.d(TAG, "Cursor overlay shown")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error showing cursor: ${e.message}")
-                }
-            }
-        }
+        // Disabled
     }
 
     fun hideCursor() {
-        mainHandler.post {
-            cursorView?.let { view ->
-                try {
-                    windowManager.removeView(view)
-                    Log.d(TAG, "Cursor overlay hidden")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error hiding cursor: ${e.message}")
-                }
-                cursorView = null
-                cursorParams = null
-            }
-        }
+        // Disabled
     }
 
-    /**
-     * Update cursor position.
-     * @param normX Normalized X (0.0 to 1.0) - raw from MediaPipe
-     * @param normY Normalized Y (0.0 to 1.0) - raw from MediaPipe  
-     */
     fun updateCursorPosition(normX: Float, normY: Float) {
-        // First show cursor if not visible
-        if (cursorView == null) {
-            showCursor()
-        }
-        
-        mainHandler.post {
-            cursorView?.let { view ->
-                cursorParams?.let { params ->
-                    try {
-                        // Use CoordinateMapper for proper transformation + smoothing
-                        val timestamp = System.currentTimeMillis()
-                        val (screenX, screenY) = coordinateMapper.map(normX, normY, timestamp)
-                        
-                        // Center the cursor on the point
-                        params.x = (screenX - view.width / 2).toInt()
-                        params.y = (screenY - view.height / 2).toInt()
-                        
-                        windowManager.updateViewLayout(view, params)
-                    } catch (e: Exception) {
-                        // Window might be gone
-                    }
-                }
-            }
-        }
+        // Disabled
     }
     
-    /**
-     * Flash the cursor a specific color for visual feedback.
-     */
     fun flashCursor(color: Int) {
-        mainHandler.post {
-            cursorView?.let { view ->
-                val bg = view.background as? GradientDrawable
-                bg?.setColor(color)
-                view.invalidate()
-                
-                // Revert to yellow after 300ms
-                mainHandler.postDelayed({
-                    bg?.setColor(Color.YELLOW)
-                    view.invalidate()
-                }, 300)
-            }
-        }
+        // Disabled
     }
 
     // ==================== GESTURE ACTIONS ====================

@@ -243,38 +243,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_backgroundRunning) {
       // Stop service and hide overlay
-      await _bgService.stop();
+      // await _bgService.stop(); // Disabled legacy service
       if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
       }
       Get.snackbar(
         "🛑 Stopped",
-        "Background gesture control stopped",
-        backgroundColor: Colors.red.withAlpha(200),
+        "Background control deactivated",
+        backgroundColor: Colors.redAccent.withAlpha(200),
       );
+      setState(() {
+        _backgroundRunning = false;
+      });
     } else {
-      // Start service and show overlay
-      await _bgService.start();
-      if (_overlayGranted && !(await FlutterOverlayWindow.isActive())) {
-        await FlutterOverlayWindow.showOverlay(
-          enableDrag: true,
-          overlayTitle: "HandLazy",
-          overlayContent: "Gesture Control Active",
-          flag: OverlayFlag.defaultFlag,
-          visibility: NotificationVisibility.visibilityPublic,
-          positionGravity: PositionGravity.auto,
-          height: 150,
-          width: 180,
-        );
-      }
+      // Start Overlay Window (v13.0: Floating Camera)
+      // await _bgService.start(); // Disabled legacy service
+
+      if (await FlutterOverlayWindow.isActive()) return;
+
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true,
+        overlayTitle: "HandLazy",
+        overlayContent: "Gesture Camera Active",
+        flag: OverlayFlag.defaultFlag,
+        visibility: NotificationVisibility.visibilityPublic,
+        positionGravity: PositionGravity.right, // Start right side
+        height: 400, // Roughly 260px logical pixels
+        width: 300, // Roughly 200px logical pixels
+      );
+
+      // Minimize App
+      // SystemChannels.platform.invokeMethod('SystemNavigator.pop'); // Optional: Minimize immediately
+
       Get.snackbar(
         "🚀 Activated!",
-        "Gesture control running in background",
+        "Floating camera started. You can minimize this app now.",
         backgroundColor: Colors.green.withAlpha(200),
       );
+      setState(() {
+        _backgroundRunning = true;
+      });
     }
 
-    _backgroundRunning = await _bgService.checkRunning();
+    // _backgroundRunning = await _bgService.checkRunning(); // Removed legacy check
     setState(() {});
   }
 
@@ -348,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  "v12.1",
+                  "v13.0",
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.deepPurpleAccent,

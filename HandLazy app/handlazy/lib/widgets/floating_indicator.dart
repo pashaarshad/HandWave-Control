@@ -1,8 +1,34 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For MethodChannel
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:camera/camera.dart';
+import 'package:hand_landmarker/hand_landmarker.dart';
 
-/// Interactive floating overlay widget with ON/OFF controls and live timer
+// Native Bridge for Gestures (Duplicate of GestureController to function in Overlay Isolate)
+class OverlayGestureController {
+  static const MethodChannel _channel = MethodChannel('com.handlazy/gestures');
+
+  Future<void> swipeUp() async {
+    try {
+      await _channel.invokeMethod('swipeUp');
+    } catch (_) {}
+  }
+
+  Future<void> swipeDown() async {
+    try {
+      await _channel.invokeMethod('swipeDown');
+    } catch (_) {}
+  }
+
+  Future<void> setVolume(int volume) async {
+    try {
+      await _channel.invokeMethod('setVolume', {'volume': volume});
+    } catch (_) {}
+  }
+}
+
 class FloatingIndicator extends StatefulWidget {
   const FloatingIndicator({super.key});
 
@@ -11,275 +37,312 @@ class FloatingIndicator extends StatefulWidget {
 }
 
 class _FloatingIndicatorState extends State<FloatingIndicator> {
-  bool _expanded = false;
-  bool _isActive = true;
-  int _elapsedSeconds = 0;
-  Timer? _timer;
-  DateTime? _startTime;
+  // UI State
+  // bool _isExpanded = true; // Default to expanded to show camera
+  String _statusMessage = "Initializing...";
+  Color _statusColor = Colors.orange;
+
+  // Camera & ML State
+  CameraController? _cameraController;
+  HandLandmarkerPlugin? _handLandmarker;
+  bool _isProcessing = false;
+  bool _isCameraReady = false;
+
+  // Gesture Logic State
+  final OverlayGestureController _gestureController =
+      OverlayGestureController();
+  double? _prevIndexY;
+  double _lastActionTime = 0;
+  int _volume = 50;
+  bool _volumeIncreasing = true;
+  bool _wasPinching = false;
+  double _lastVolumeChange = 0;
 
   @override
   void initState() {
     super.initState();
-    _startTimer();
+    _initializeCameraAndML();
+
+    // Resize overlay to fit camera preview initially
+    // FlutterOverlayWindow.resizeOverlay(200, 260, true);
   }
- 
+
   @override
-  void dispose() { 
-    _timer?.cancel();
+  void dispose() {
+    _cameraController?.dispose();
+    _handLandmarker?.dispose();
     super.dispose();
   }
 
-  void _startTimer() {
-    _startTime = DateTime.now();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_isActive && mounted) {
+  Future<void> _initializeCameraAndML() async {
+    try {
+      // 1. Initialize ML
+      _handLandmarker = await HandLandmarkerPlugin.create(numHands: 1);
+
+      // 2. Initialize Camera
+      final cameras = await availableCameras();
+      final front = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      _cameraController = CameraController(
+        front,
+        ResolutionPreset.low, // 240p is enough for gestures and saves battery
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.yuv420,
+      );
+
+      await _cameraController!.initialize();
+
+      if (mounted) {
         setState(() {
-          _elapsedSeconds = DateTime.now().difference(_startTime!).inSeconds;
+          _isCameraReady = true;
+          _statusMessage = "Ready";
+          _statusColor = Colors.green;
         });
+        _startProcessing();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _statusMessage = "Error: $e";
+          _statusColor = Colors.red;
+        });
+      }
+    }
+  }
+
+  void _startProcessing() {
+    if (_cameraController == null) return;
+
+    _cameraController!.startImageStream((image) async {
+      if (_isProcessing || _handLandmarker == null) return;
+      _isProcessing = true;
+
+      try {
+        final result = _handLandmarker!.detect(image, 0);
+
+        if (result.isNotEmpty) {
+          final landmarks = result.first.landmarks;
+          _processLandmarks(landmarks);
+
+          if (mounted) {
+            setState(() {
+              _statusColor = Colors.greenAccent;
+            });
+          }
+        } else {
+          if (mounted && _statusColor == Colors.greenAccent) {
+            setState(() {
+              _statusColor = Colors.green;
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore frame errors
+      } finally {
+        _isProcessing = false;
       }
     });
   }
 
-  String _formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final secs = seconds % 60;
-    if (minutes > 0) {
-      return '${minutes}m ${secs}s';
+  void _processLandmarks(List<dynamic> landmarks) {
+    if (landmarks.isEmpty) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+
+    // Key Points
+    final thumbTip = landmarks[4];
+    final indexTip = landmarks[8];
+    final pinkyTip = landmarks[20];
+    final wrist = landmarks[0];
+
+    // Calculations
+    double thumbToIndex = _dist(thumbTip, indexTip);
+    double indexToWrist = _dist(indexTip, wrist);
+    double pinkyToWrist = _dist(pinkyTip, wrist);
+
+    // Logic
+    bool isPinching = thumbToIndex < 0.08;
+    bool isOpen = indexToWrist > 0.20 && pinkyToWrist > 0.15;
+
+    // Detect Gestures
+    if (isPinching) {
+      _handlePinch(now);
+    } else if (isOpen) {
+      _handleOpenHand(now);
+    } else {
+      _handlePointing(now, indexTip);
     }
-    return '${secs}s';
+
+    _wasPinching = isPinching;
+    _prevIndexY = indexTip.y;
+  }
+
+  void _handlePinch(double now) {
+    if (!_wasPinching) {
+      _volumeIncreasing = !_volumeIncreasing; // Toggle direction
+    }
+
+    if (now - _lastVolumeChange > 0.2) {
+      if (_volumeIncreasing && _volume < 100) _volume += 10;
+      if (!_volumeIncreasing && _volume > 0) _volume -= 10;
+
+      _gestureController.setVolume(_volume);
+      _lastVolumeChange = now;
+
+      setState(() {
+        _statusMessage = "Vol: $_volume%";
+        _statusColor = Colors.cyan;
+      });
+    }
+  }
+
+  void _handleOpenHand(double now) {
+    if (now - _lastActionTime > 0.8) {
+      _gestureController.swipeDown(); // Prev Reel
+      _lastActionTime = now;
+      setState(() {
+        _statusMessage = "Prev Reel";
+        _statusColor = Colors.pinkAccent;
+      });
+    }
+  }
+
+  void _handlePointing(double now, dynamic indexTip) {
+    if (_prevIndexY != null && (now - _lastActionTime) > 0.6) {
+      double dy = indexTip.y - _prevIndexY!;
+      if (dy < -0.06) {
+        _gestureController.swipeUp(); // Next Reel
+        _lastActionTime = now;
+        setState(() {
+          _statusMessage = "Next Reel";
+          _statusColor = Colors.lightGreenAccent;
+        });
+      }
+    }
+  }
+
+  double _dist(dynamic a, dynamic b) {
+    return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
   }
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _expanded = !_expanded);
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: _expanded ? 180 : 70,
-          height: _expanded ? 160 : 70,
-          decoration: BoxDecoration(
-            // GREEN for active, RED for stopped
-            gradient: LinearGradient(
-              colors: _isActive
-                  ? [Colors.green.shade700, Colors.green.shade500]
-                  : [Colors.red.shade700, Colors.red.shade500],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withAlpha(200),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _statusColor, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: _statusColor.withAlpha(100),
+              blurRadius: 15,
+              spreadRadius: 2,
             ),
-            borderRadius: BorderRadius.circular(_expanded ? 16 : 35),
-            border: Border.all(
-              color: _isActive ? Colors.greenAccent : Colors.redAccent,
-              width: 3,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _isActive
-                    ? Colors.green.withAlpha(180)
-                    : Colors.red.withAlpha(180),
-                blurRadius: 20,
-                spreadRadius: 5,
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: Stack(
+            children: [
+              // 1. Camera Preview Layer
+              if (_isCameraReady && _cameraController != null)
+                Positioned.fill(
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.rotationY(pi), // Mirror effect
+                    child: CameraPreview(_cameraController!),
+                  ),
+                )
+              else
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+
+              // 2. Overlay Info Layer
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 8,
+                  ),
+                  color: Colors.black54,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _statusMessage,
+                        style: TextStyle(
+                          color: _statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildDot(_statusColor == Colors.greenAccent),
+                          const SizedBox(width: 4),
+                          Text(
+                            "HandLazy",
+                            style: TextStyle(
+                              color: Colors.white.withAlpha(150),
+                              fontSize: 8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 3. Close/Minimize Button
+              Positioned(
+                top: 5,
+                right: 5,
+                child: GestureDetector(
+                  onTap: () {
+                    // Close Overlay and Open App
+                    FlutterOverlayWindow.shareData("OPEN_APP");
+                    FlutterOverlayWindow.closeOverlay();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.black45,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          child: _expanded ? _buildExpandedView() : _buildCollapsedView(),
         ),
       ),
     );
   }
 
-  Widget _buildCollapsedView() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.pan_tool_alt, color: Colors.white, size: 22),
-          const SizedBox(height: 2),
-          Text(
-            _isActive ? "ON" : "OFF",
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (_isActive)
-            Text(
-              _formatTime(_elapsedSeconds),
-              style: TextStyle(
-                color: Colors.white.withAlpha(200),
-                fontSize: 8,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpandedView() {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.pan_tool_alt, color: Colors.white, size: 18),
-                  SizedBox(width: 6),
-                  Text(
-                    "HandLazy",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: () => setState(() => _expanded = false),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 14),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Status with timer
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(30),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: _isActive ? Colors.greenAccent : Colors.redAccent,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: _isActive ? Colors.green : Colors.red,
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isActive ? "ACTIVE" : "STOPPED",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                      ),
-                      if (_isActive)
-                        Text(
-                          "Running: ${_formatTime(_elapsedSeconds)}",
-                          style: TextStyle(
-                            color: Colors.white.withAlpha(180),
-                            fontSize: 9,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // Control Buttons
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isActive = !_isActive;
-                      if (_isActive) {
-                        _startTime = DateTime.now();
-                        _elapsedSeconds = 0;
-                      }
-                    });
-                    FlutterOverlayWindow.shareData(
-                      _isActive ? "START" : "STOP",
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: _isActive
-                          ? Colors.red.shade600
-                          : Colors.green.shade600,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _isActive
-                            ? Colors.redAccent
-                            : Colors.greenAccent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _isActive ? "⏹ STOP" : "▶ START",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () {
-                  FlutterOverlayWindow.shareData("OPEN_APP");
-                  FlutterOverlayWindow.closeOverlay();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white38, width: 1),
-                  ),
-                  child: const Icon(
-                    Icons.open_in_new,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+  Widget _buildDot(bool active) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: active ? Colors.green : Colors.grey,
+        shape: BoxShape.circle,
       ),
     );
   }
@@ -291,10 +354,7 @@ void overlayMain() {
   runApp(
     const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Center(child: FloatingIndicator()),
-      ),
+      home: FloatingIndicator(), // Removed Scaffold for transparent background
     ),
   );
 }
