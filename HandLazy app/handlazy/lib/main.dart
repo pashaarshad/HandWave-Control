@@ -242,11 +242,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_backgroundRunning) {
-      // Stop service and hide overlay
-      // await _bgService.stop(); // Disabled legacy service
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
-      }
+      // Stop native service
+      await _gestureController.stopNativeTracking();
+
       Get.snackbar(
         "🛑 Stopped",
         "Background control deactivated",
@@ -256,33 +254,25 @@ class _HomeScreenState extends State<HomeScreen> {
         _backgroundRunning = false;
       });
     } else {
-      // Start Overlay Window (v13.0: Floating Camera)
-      // await _bgService.start(); // Disabled legacy service
+      // Start Native Service (v14.0: Native Camera & ML)
+      bool success = await _gestureController.startNativeTracking();
 
-      if (await FlutterOverlayWindow.isActive()) return;
-
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        overlayTitle: "HandLazy",
-        overlayContent: "Gesture Camera Active",
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.right, // Start right side
-        height: 400, // Roughly 260px logical pixels
-        width: 300, // Roughly 200px logical pixels
-      );
-
-      // Minimize App
-      // SystemChannels.platform.invokeMethod('SystemNavigator.pop'); // Optional: Minimize immediately
-
-      Get.snackbar(
-        "🚀 Activated!",
-        "Floating camera started. You can minimize this app now.",
-        backgroundColor: Colors.green.withAlpha(200),
-      );
-      setState(() {
-        _backgroundRunning = true;
-      });
+      if (success) {
+        Get.snackbar(
+          "🚀 Activated!",
+          "Floating camera started via Native Service. You can minimize this app now.",
+          backgroundColor: Colors.green.withAlpha(200),
+        );
+        setState(() {
+          _backgroundRunning = true;
+        });
+      } else {
+        Get.snackbar(
+          "❌ Error",
+          "Failed to start native service. Check if Accessibility is enabled.",
+          backgroundColor: Colors.red.withAlpha(200),
+        );
+      }
     }
 
     // _backgroundRunning = await _bgService.checkRunning(); // Removed legacy check
@@ -359,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  "v13.0",
+                  "v14.0",
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.deepPurpleAccent,

@@ -97,6 +97,24 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                "startNativeTracking" -> {
+                     val service = GestureAccessibilityService.getInstance()
+                     if (service != null) {
+                         service.startNativeTracking()
+                         result.success(true)
+                     } else {
+                         result.error("SERVICE_NOT_RUNNING", "Accessibility service not running", null)
+                     }
+                }
+                "stopNativeTracking" -> {
+                     val service = GestureAccessibilityService.getInstance()
+                     if (service != null) {
+                         service.stopNativeTracking()
+                         result.success(true)
+                     } else {
+                         result.success(false)
+                     }
+                }
                 else -> {
                     result.notImplemented()
                 }

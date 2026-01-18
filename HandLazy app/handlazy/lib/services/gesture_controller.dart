@@ -115,4 +115,22 @@ class GestureController {
       // Ignore
     }
   }
+
+  Future<bool> startNativeTracking() async {
+    try {
+      await _channel.invokeMethod('startNativeTracking');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> stopNativeTracking() async {
+    try {
+      await _channel.invokeMethod('stopNativeTracking');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:hand_landmarker/hand_landmarker.dart';
 import 'package:get/get.dart';
+import 'services/gesture_controller.dart';
 
 class TestScreen extends StatefulWidget {
   const TestScreen({super.key});
@@ -179,6 +180,9 @@ class _TestScreenState extends State<TestScreen> {
           if (_volume < 0) _volume = 0;
         }
         _lastVolumeChange = now;
+
+        // Real-time system volume control
+        GestureController().setVolume(_volume);
       }
     } else if (isOpen) {
       _gestureMode = "🖐️ OPEN";
@@ -188,6 +192,9 @@ class _TestScreenState extends State<TestScreen> {
       if (now - _lastActionTime > 0.8) {
         _lastAction = "⬇️ PREV REEL";
         _lastActionTime = now;
+
+        // Real swipe down gesture
+        GestureController().swipeDown();
       }
     } else {
       _gestureMode = "☝️ POINTING";
@@ -207,6 +214,9 @@ class _TestScreenState extends State<TestScreen> {
       if (dy < -0.06) {
         _lastAction = "⬆️ NEXT REEL";
         _lastActionTime = now;
+
+        // Real swipe up gesture
+        GestureController().swipeUp();
       }
     }
     _prevIndexY = currentY;

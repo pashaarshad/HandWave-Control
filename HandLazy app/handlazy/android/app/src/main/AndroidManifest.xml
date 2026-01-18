@@ -63,6 +63,7 @@
             android:name=".GestureAccessibilityService"
             android:exported="true"
             android:label="HandLazy Gesture Control"
+            android:foregroundServiceType="camera"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
